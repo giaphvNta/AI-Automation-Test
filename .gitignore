@@ -1,0 +1,29 @@
+# Credentials
+service-auth.json
+*-auth.json
+.env
+.env.local
+
+# Personal Claude Code settings (permissions cá nhân)
+.claude/settings.local.json
+projects/*
+
+# Playwright runtime
+automation/node_modules/
+automation/test-results/
+automation/playwright-report/
+automation/projects/*/.env
+automation/projects/*/.auth/
+automation/projects/*/test-results/
+automation/projects/*/playwright-report/
+
+# Customer projects (chứa data thật) — chỉ giữ demo
+automation/projects/*
+!automation/projects/demo/
+!automation/projects/demo/**
+
+# Generated / runtime artifacts (giữ file trên disk, không lên git)
+automation/.test-status.json
+automation/.playwright-deps-ready
+automation/dashboard.html
+create-presentation.py

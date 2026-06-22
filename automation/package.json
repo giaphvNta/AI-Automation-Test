@@ -1,0 +1,27 @@
+{
+  "name": "automation",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "./scripts/run-test.sh demo",
+    "test:project": "./scripts/run-test.sh",
+    "report": "./scripts/show-report.sh",
+    "sheet:load": "node scripts/load-google-sheet.mjs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@types/node": "^25.9.1",
+    "dotenv": "^17.4.2"
+  },
+  "dependencies": {
+    "mysql2": "^3.22.4"
+  }
+}
