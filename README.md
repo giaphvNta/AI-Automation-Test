@@ -8,7 +8,7 @@
 ## Mục lục
 
 1. [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
-2. [Cài đặt lần đầu](#cài-đặt-lần-đầu)
+2. [Cài đặt / Gỡ cài đặt](#cài-đặt-lần-đầu)
 3. [Cách dùng](#cách-dùng)
 4. [Chế độ chạy](#chế-độ-chạy)
 5. [Xem kết quả](#xem-kết-quả)
@@ -35,7 +35,7 @@
 
 ## Cài đặt lần đầu
 
-> Chạy **1 lần duy nhất** trên mỗi máy.
+> Chạy **1 lần duy nhất** trên mỗi máy. Sau khi cài, `/ai-test` và `/ai-test-i` dùng được từ **bất kỳ project nào** — không cần cấu hình thêm ở từng project.
 
 ### Bước 1: Chuẩn bị Docker Desktop
 
@@ -70,8 +70,15 @@ cd /home/user/ai-automation-test
 Script tự động:
 - ✅ Kiểm tra Docker
 - ✅ Verify automation hub (agents, config)
-- ✅ Đăng ký slash command `/ai-test` vào `~/.claude/commands/`
+- ✅ Đăng ký slash command `/ai-test` + `/ai-test-i` vào `~/.claude/commands/` (global — dùng được mọi project)
 - ✅ Tạo `.gitignore`
+
+**Gỡ cài đặt** (xóa slash commands, giữ nguyên repo + Docker image):
+```bash
+cd /home/user/ai-automation-test
+./setup.sh --uninstall
+```
+Reload VSCode sau khi gỡ: `Ctrl+Shift+P` → **Developer: Reload Window**
 
 ### Bước 3: Build Docker image
 
@@ -94,7 +101,7 @@ Gõ trong Claude Code chat:
 ```
 /ai-test
 ```
-→ Claude phản hồi (hỏi argument) là setup thành công.
+→ Hook validate **chặn** và nhắc thiếu `--project`/input — đó chính là dấu hiệu hook + command đã nạp đúng. Muốn vào chế độ tương tác (AI hỏi qua picker), gõ `/ai-test-i`.
 
 ---
 
@@ -164,6 +171,26 @@ Gõ trong Claude Code chat:
 ```
 /ai-test ./spec.md --project=customer-a --interactive
 ```
+
+### Chế độ tương tác `/ai-test-i` (không cần nhớ flag)
+
+Không muốn nhớ cú pháp flag? Gõ `/ai-test-i` — AI sẽ **hỏi qua picker** những gì còn thiếu:
+
+```
+/ai-test-i
+```
+
+→ AI lần lượt hiện picker để bạn chọn:
+1. **Nguồn test** — dán Google Sheet URL / URL web / file spec, hoặc gõ mô tả.
+2. **`--project`** — chọn từ danh sách project có sẵn (hoặc nhập project mới).
+3. **Chế độ** — tick nhiều: `--fast`, `--live`, `--interactive`, `--rerun` (bỏ trống = Normal).
+
+Sau khi đủ tham số, `/ai-test-i` chạy **đúng pipeline 7 bước của `/ai-test`** — mọi quy tắc (seed, heal, report, video) giống hệt. Bạn cũng có thể truyền sẵn một phần flag, AI chỉ hỏi phần còn thiếu:
+```
+/ai-test-i --project=customer-a          # chỉ còn hỏi nguồn test + chế độ
+```
+
+> **Hook validate:** Khi gõ `/ai-test` mà **thiếu `--project` hoặc input**, một hook (`UserPromptSubmit`) sẽ chặn lệnh và in hướng dẫn, tránh chạy nhầm với tham số không đầy đủ. `/ai-test-i` không bị chặn vì nó tự hỏi. Hook tự bỏ qua (fail open) nếu máy chưa cài `jq`.
 
 ### Điều gì xảy ra sau khi gõ lệnh?
 
@@ -604,10 +631,13 @@ node scripts/write-results-to-sheet.mjs \
 | `--tester-col=<col>` | Không | Cột Tester — auto-detect |
 | `--tester=<name>` | Không | Giá trị điền vào cột Tester (mặc định: `Claude AI`) |
 | `--note-col=<col>` | Không | Cột ghi error message khi fail — auto-detect |
+| `--result-col=<col>` | Không | Cột kết quả — **BẮT BUỘC chỉ định khi sheet tiếng Nhật hoặc có nhiều cột kết quả** |
 | `--start-row=<n>` | Không | Dòng data đầu tiên (mặc định: `2`) |
 | `--auth=<path>` | Không | Đường dẫn service-auth.json |
 
 > `<col>` có thể là tên header (`"Test date"`), letter (`F`), hoặc số thứ tự (`6`).
+
+> ⚠️ **Sheet tiếng Nhật hoặc có nhiều cột kết quả (`結果1`, `結果2`...):** Auto-detect có thể nhầm cột `期待結果` (Expected Results) thay vì cột kết quả test (`結果2`). Phải chỉ định tường minh: `--result-col="結果2"`. Không để auto-detect quyết định.
 
 #### Theo dõi lịch sử run (tracking mode)
 
@@ -676,11 +706,26 @@ node scripts/write-results-to-doc.mjs \
 ├── setup.sh                          ← Chạy 1 lần khi onboard máy mới
 ├── service-auth.json                 ← Google credentials (gitignore, tạo thủ công)
 │
-├── commands/
-│   └── ai-test.md                   ← Slash command (setup.sh copy → ~/.claude/commands/)
+├── .claude/
+│   ├── settings.json                ← Đăng ký hook validate (UserPromptSubmit)
+│   └── hooks/
+│       └── ai-test-guard.sh         ← Chặn /ai-test khi thiếu --project/input
 │
-├── skills/ai-test/
-│   └── SKILL.md                     ← Logic chi tiết cho AI orchestrator
+├── commands/
+│   ├── ai-test.md                   ← Slash command /ai-test (setup.sh copy → ~/.claude/commands/)
+│   └── ai-test-i.md                 ← Slash command /ai-test-i (tương tác qua picker)
+│
+├── skills/
+│   ├── ai-test/
+│   │   ├── SKILL.md                 ← File chính (422 dòng) — AI luôn đọc toàn bộ
+│   │   ├── rules/
+│   │   │   └── RULES.md             ← 16 nguyên tắc bất biến (Bước 0 — AI luôn đọc)
+│   │   └── steps/
+│   │       ├── STEP-3b-seed.md      ← Quy tắc seed data chi tiết
+│   │       ├── STEP-7d-sheet.md     ← Ghi kết quả vào Sheet/Doc
+│   │       └── STEP-report.md       ← Template AI_REPORT.md đầy đủ
+│   └── ai-test-i/
+│       └── SKILL.md                 ← Front-end picker: thu thập flag rồi gọi lại ai-test
 │
 └── automation/                      ← Playwright Hub (KHÔNG edit thường xuyên)
     ├── Dockerfile                   ← Image = playwright + ffmpeg + VNC tools
@@ -782,5 +827,17 @@ docker compose build playwright
 ### Google Sheet: authentication error
 
 → Kiểm tra `service-auth.json` tồn tại và sheet đã share với email service account.
+
+### Google Sheet: AI ghi nhầm vào cột Expected Results thay vì cột kết quả
+
+→ Xảy ra khi sheet dùng tiếng Nhật hoặc có nhiều cột kết quả (`結果1`, `結果2`...). Script auto-detect nhầm cột `期待結果` (Expected Results) là cột kết quả test. Chỉ định tường minh khi ghi:
+
+```bash
+node scripts/write-results-to-sheet.mjs \
+  --sheet="<url>" --project=<name> --run-id=<id> \
+  --result-col="結果2"
+```
+
+Hoặc khi dùng flag `--sheet` trong lệnh `/ai-test`, thêm `--result-col` nếu sheet có pattern tương tự.
 
 ---

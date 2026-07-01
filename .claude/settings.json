@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "command": "/home/user/ai-automation-test/.claude/hooks/ai-test-guard.sh",
+        "timeout": 10
+      }
+    ]
+  }
+}

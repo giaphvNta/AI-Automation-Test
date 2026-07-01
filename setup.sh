@@ -18,6 +18,35 @@ ok()   { echo -e "${GREEN}  ✓${NC} $*"; }
 warn() { echo -e "${YELLOW}  ⚠${NC} $*"; }
 err()  { echo -e "${RED}  ✗${NC} $*"; }
 
+# ─── Uninstall mode ───────────────────────────────────────────────────────────
+if [[ "${1:-}" == "--uninstall" ]]; then
+  echo ""
+  echo "╔══════════════════════════════════════════╗"
+  echo "║   AI Automation Test — Uninstall         ║"
+  echo "╚══════════════════════════════════════════╝"
+  echo ""
+  REMOVED=0
+  for cmd in ai-test ai-test-i; do
+    if [ -f "$CLAUDE_COMMANDS_DIR/$cmd.md" ]; then
+      rm "$CLAUDE_COMMANDS_DIR/$cmd.md"
+      ok "Đã xóa ~/.claude/commands/$cmd.md"
+      REMOVED=$((REMOVED + 1))
+    else
+      warn "Không tìm thấy ~/.claude/commands/$cmd.md — bỏ qua"
+    fi
+  done
+  echo ""
+  if [ "$REMOVED" -gt 0 ]; then
+    echo "  ✅ Đã gỡ $REMOVED slash command. Reload VSCode để áp dụng:"
+    echo "     Ctrl+Shift+P → Developer: Reload Window"
+  else
+    echo "  ℹ️  Không có gì để gỡ."
+  fi
+  echo "  (Repo và Docker image giữ nguyên — chỉ xóa slash commands)"
+  echo ""
+  exit 0
+fi
+
 echo ""
 echo "╔══════════════════════════════════════════╗"
 echo "║   AI Automation Test — Setup             ║"
@@ -98,19 +127,39 @@ else
   ok "node_modules OK"
 fi
 
-# ─── 4. Cài /ai-test slash command ────────────────────────────────────────────
+# ─── 4. Cài slash command /ai-test + /ai-test-i ───────────────────────────────
 
 echo ""
-echo "► Bước 4: Đăng ký slash command /ai-test"
+echo "► Bước 4: Đăng ký slash command /ai-test, /ai-test-i"
 
 mkdir -p "$CLAUDE_COMMANDS_DIR"
 
-if [ -f "$CLAUDE_COMMANDS_DIR/ai-test.md" ]; then
-  warn "~/.claude/commands/ai-test.md đã tồn tại — overwrite"
+for cmd in ai-test ai-test-i; do
+  if [ -f "$CLAUDE_COMMANDS_DIR/$cmd.md" ]; then
+    warn "~/.claude/commands/$cmd.md đã tồn tại — overwrite"
+  fi
+  cp "$APP_ROOT/commands/$cmd.md" "$CLAUDE_COMMANDS_DIR/$cmd.md"
+  ok "Slash command /$cmd đã đăng ký tại ~/.claude/commands/$cmd.md"
+done
+
+# ─── 4b. Hook validate /ai-test (Validate & chặn) ─────────────────────────────
+
+echo ""
+echo "► Bước 4b: Hook validate cho /ai-test"
+
+HOOK="$APP_ROOT/.claude/hooks/ai-test-guard.sh"
+if [ -f "$HOOK" ]; then
+  chmod +x "$HOOK"
+  ok "Hook ai-test-guard.sh đã +x (đăng ký sẵn trong .claude/settings.json)"
+else
+  err "MISSING: $HOOK"
 fi
 
-cp "$APP_ROOT/commands/ai-test.md" "$CLAUDE_COMMANDS_DIR/ai-test.md"
-ok "Slash command /ai-test đã đăng ký tại ~/.claude/commands/ai-test.md"
+if command -v jq &>/dev/null; then
+  ok "jq $(jq --version) — hook validate dùng được"
+else
+  warn "jq chưa cài → hook validate tự bỏ qua (fail open). Cài: sudo apt install jq"
+fi
 
 # ─── 5. Tạo .gitignore cho app root ──────────────────────────────────────────
 
@@ -149,9 +198,13 @@ echo "╚═══════════════════════�
 echo ""
 echo "  Bước tiếp theo:"
 echo "  1. Reload VSCode: Ctrl+Shift+P → Developer: Reload Window"
+echo "     (cần reload để nạp hook validate trong .claude/settings.json)"
 echo "  2. Thử lệnh trong Claude Code chat:"
 echo ""
 echo '     /ai-test "Test trang example.com — verify title" --project=demo --target=https://example.com'
+echo ""
+echo "     # Hoặc chế độ tương tác — không cần nhớ flag, AI hỏi qua picker:"
+echo "     /ai-test-i"
 echo ""
 echo "  Thư mục test sẽ được tạo tự động tại:"
 echo "  $APP_ROOT/automation/projects/<tên-project>/"
