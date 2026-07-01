@@ -48,8 +48,9 @@ const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 
 // Cột status/kết quả tổng hợp
 // ⚠️ KHÔNG dùng 'result' làm keyword vì match nhầm "Expected Results" (cột spec, không phải cột kết quả test)
-// Chỉ match khi header là "Status", "Kết quả", "Outcome" — không match "Expected Results", "Test Results", v.v.
-const RESULT_COL_KEYWORDS = ['status', 'kết quả', 'outcome', 'trạng thái', '結果'];
+// ⚠️ KHÔNG match "期待結果" (expected result tiếng Nhật) — đã loại ở SPEC_COLUMN_PREFIXES
+// Match ưu tiên: "結果1", "結果2" (có số suffix) trước, rồi mới "結果" đơn thuần
+const RESULT_COL_KEYWORDS = ['結果2', '結果1', 'kết quả 2', 'kết quả 1', 'status', 'kết quả', 'outcome', 'trạng thái', '結果'];
 // Cột tên test case để match
 const MATCH_COL_KEYWORDS  = ['test case', 'testcase', 'test name', 'tên test', 'scenario',
                               'title', 'case name', 'id', 'no.', 'no ', 'tc'];
@@ -183,8 +184,9 @@ function letterToIndex(letter) {
   return index - 1;
 }
 
-// Các prefix chỉ ra đây là cột spec/mô tả, KHÔNG phải cột kết quả test
-const SPEC_COLUMN_PREFIXES = ['expected', 'actual', 'test step', 'pre-condition', 'objective', 'mô tả', 'muc tieu'];
+// Các prefix/keyword chỉ ra đây là cột spec/mô tả, KHÔNG phải cột kết quả test
+// Thêm: '期待' (kỳ vọng/expected tiếng Nhật) để tránh match nhầm "期待結果" (expected result)
+const SPEC_COLUMN_PREFIXES = ['expected', 'actual', 'test step', 'pre-condition', 'objective', 'mô tả', 'muc tieu', '期待', '予想', 'kết quả mong'];
 
 function detectColumn(headers, keywords) {
   const norm = (s) => (s || '').toLowerCase().trim();

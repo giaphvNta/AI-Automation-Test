@@ -31,6 +31,14 @@ if [ -f "$PROJECT_DIR/.env" ]; then
   PROJECT_ENV_FILE="--env-file $PROJECT_DIR/.env"
 fi
 
+# Nạp compose override riêng project (nếu có) — ví dụ mount cache đặc thù.
+# Mount/volume đặc thù KHÔNG nằm trong docker-compose.yml chung nữa.
+COMPOSE_FILES="-f docker-compose.yml"
+if [ -f "$PROJECT_DIR/docker-compose.override.yml" ]; then
+  COMPOSE_FILES="$COMPOSE_FILES -f $PROJECT_DIR/docker-compose.override.yml"
+  echo "[run-test] 🧩 Override: projects/$PROJECT_NAME/docker-compose.override.yml"
+fi
+
 GID="$(id -g)"
 export UID GID
 export TEST_PROJECT="$PROJECT_NAME"
@@ -48,7 +56,7 @@ echo "[run-test] 🐳 Project: '$PROJECT_NAME' | Run ID: $RUN_ID"
 # shellcheck disable=SC2086
 if [ ! -f "$DEPS_MARKER" ] || [ "$PKG_LOCK" -nt "$DEPS_MARKER" ]; then
   echo "[run-test] 📦 Cài dependencies..."
-  docker compose $PROJECT_ENV_FILE run --rm --user root \
+  docker compose $COMPOSE_FILES $PROJECT_ENV_FILE run --rm --user root \
     -e HOST_UID="$(id -u)" \
     -e HOST_GID="$(id -g)" \
     playwright \
@@ -64,12 +72,13 @@ set +e
 if [ -n "$TEST_LIVE" ]; then
   # Live mode: publish port 6080 cho noVNC
   # shellcheck disable=SC2086
-  docker compose $PROJECT_ENV_FILE run --rm \
+  docker compose $COMPOSE_FILES $PROJECT_ENV_FILE run --rm \
     -p 6080:6080 \
     -e TEST_PROJECT="$PROJECT_NAME" \
     -e TEST_RUN_ID="$RUN_ID" \
     -e TEST_LIVE="$TEST_LIVE" \
     -e TEST_FAST="$TEST_FAST" \
+    -e VNC_GEOMETRY="${VNC_GEOMETRY:-}" \
     -e SPEC_FILE="$SPEC_PATH" \
     --entrypoint bash \
     playwright \
@@ -77,7 +86,7 @@ if [ -n "$TEST_LIVE" ]; then
 else
   # Normal / fast mode
   # shellcheck disable=SC2086
-  docker compose $PROJECT_ENV_FILE run --rm \
+  docker compose $COMPOSE_FILES $PROJECT_ENV_FILE run --rm \
     -e TEST_PROJECT="$PROJECT_NAME" \
     -e TEST_RUN_ID="$RUN_ID" \
     -e TEST_FAST="$TEST_FAST" \

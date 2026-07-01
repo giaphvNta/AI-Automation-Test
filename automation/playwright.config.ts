@@ -29,6 +29,10 @@ export default defineConfig({
         ['json', { outputFile: `${testRunDir}/results.json` }],
       ],
   outputDir: `${testRunDir}/artifacts`,
+  // Visual baseline (vd export từ Figma) lưu tại projects/<proj>/baselines/<name>.png,
+  // không kèm hậu tố platform → ảnh design dùng trực tiếp, độc lập OS.
+  // Chỉ áp dụng cho assertion toHaveScreenshot/toMatchSnapshot (hiện chỉ figma-poc dùng).
+  snapshotPathTemplate: 'projects/{testFileDir}/../baselines/{arg}{ext}',
   timeout: 30_000,
   expect: { timeout: 5_000 },
 

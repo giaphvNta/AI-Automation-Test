@@ -5,6 +5,7 @@ RUN apt-get update -qq && \
       ffmpeg \
       x11vnc \
       novnc \
-      websockify && \
+      websockify \
+      mysql-client && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
