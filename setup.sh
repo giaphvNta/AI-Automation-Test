@@ -138,8 +138,10 @@ for cmd in ai-test ai-test-i; do
   if [ -f "$CLAUDE_COMMANDS_DIR/$cmd.md" ]; then
     warn "~/.claude/commands/$cmd.md đã tồn tại — overwrite"
   fi
-  cp "$APP_ROOT/commands/$cmd.md" "$CLAUDE_COMMANDS_DIR/$cmd.md"
-  ok "Slash command /$cmd đã đăng ký tại ~/.claude/commands/$cmd.md"
+  # Inject APP_ROOT thật của máy này vào placeholder {{APP_ROOT}}.
+  # Nhờ vậy mỗi dev / mỗi máy (kể cả macOS, clone ở path khác) đều trỏ đúng đường dẫn.
+  sed "s|{{APP_ROOT}}|$APP_ROOT|g" "$APP_ROOT/commands/$cmd.md" > "$CLAUDE_COMMANDS_DIR/$cmd.md"
+  ok "Slash command /$cmd đã đăng ký tại ~/.claude/commands/$cmd.md (APP_ROOT=$APP_ROOT)"
 done
 
 # ─── 4b. Hook validate /ai-test (Validate & chặn) ─────────────────────────────

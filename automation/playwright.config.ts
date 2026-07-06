@@ -17,7 +17,10 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  workers: isFast ? 4 : 2,
+  // Normal: 1 worker — các spec file chạy tuần tự, tránh contamination app state
+  // (rate limit, DB seed, blacklist IP container) giữa các file chạy song song.
+  // Project có tests hoàn toàn độc lập → override bằng TEST_WORKERS trong projects/<name>/.env.
+  workers: Number(process.env.TEST_WORKERS || (isFast ? 4 : 1)),
   reporter: isFast
     ? [
         ['dot'],

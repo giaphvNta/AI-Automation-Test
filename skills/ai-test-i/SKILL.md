@@ -11,11 +11,14 @@ argument-hint: "[không cần flag — thiếu gì sẽ hỏi qua picker]"
 > Mọi quy tắc test (hash skip/rerun, seed, env confirm/restore, heal, report, source-meta)
 > đều theo `ai-test`, không sửa đổi.
 
-## Paths cố định
+## Paths — TỰ SUY RA, KHÔNG hardcode
+
+**APP_ROOT = đường dẫn bạn vừa Read file này, bỏ đuôi `/skills/ai-test-i/SKILL.md`.**
+Tool có thể clone ở path bất kỳ, máy bất kỳ (Linux/WSL/macOS) — luôn suy APP_ROOT từ path đọc file, không dùng path cứng.
 
 ```
- AI_TEST_SKILL = /home/user/ai-automation-test/skills/ai-test/SKILL.md
-PROJECTS       = /home/user/ai-automation-test/automation/projects
+AI_TEST_SKILL = $APP_ROOT/skills/ai-test/SKILL.md
+PROJECTS      = $APP_ROOT/automation/projects
 ```
 
 ## Nguyên tắc
@@ -34,7 +37,7 @@ PROJECTS       = /home/user/ai-automation-test/automation/projects
 Tách từ `$ARGUMENTS`:
 - **input** = token đầu tiên KHÔNG bắt đầu bằng `--` (URL / path / mô tả trong ngoặc kép).
 - **project** = giá trị của `--project=...`.
-- **mode flags** = các cờ boolean đã có (`--fast`, `--live`, `--interactive`, `--rerun`).
+- **mode flags** = các cờ boolean đã có (`--fast`, `--live`, `--screens`, `--interactive`, `--rerun`).
 - **passthrough** = mọi cờ khác (`--target=`, `--max-heal=`, `--only=`, `--sheet=`, `--sheet-tab=`, `--doc=`) → giữ nguyên, KHÔNG hỏi.
 
 Xác định `MISSING_INPUT` (chưa có input) và `MISSING_PROJECT` (chưa có `--project`).
@@ -43,7 +46,7 @@ Nếu **không thiếu gì** → bỏ qua Phần A, sang thẳng Phần B.
 ### A1. Lấy danh sách project (để dựng options)
 
 ```bash
-ls -1t /home/user/ai-automation-test/automation/projects/ 2>/dev/null
+ls -1t $APP_ROOT/automation/projects/ 2>/dev/null
 ```
 Lấy tối đa **4 project mới nhất** làm options cho câu hỏi project. Project khác / project mới → user bấm **"Other"** để nhập tên.
 
@@ -68,11 +71,12 @@ Gộp tất cả câu hỏi cần thiết vào **một** lần gọi AskUserQues
 - **Câu MODE** (luôn hỏi — cho phép bỏ trống = normal mode):
   - question: `"Chọn chế độ chạy (chọn nhiều hoặc bỏ trống = Normal đầy đủ)"`
   - header: `"Chế độ"`, multiSelect: **true**
-  - options:
+  - options (tối đa 4 — AskUserQuestion không cho quá 4):
     - `--fast` — desc: `"Nhanh, tiết kiệm token: tắt video/trace, 4 workers, bỏ heal, report 3 dòng"`
     - `--live` — desc: `"Xem trực tiếp qua VNC (http://localhost:6080/vnc.html), chậm 600ms/action"`
+    - `--screens` — desc: `"Dùng knowledge map màn hình (SCREENS.md): tái dùng selector/flow/data recipe → nhanh + chính xác + ít heal. Lần đầu crawl 1 lần"`
     - `--interactive` — desc: `"Confirm từng bước (plan/code) trước khi chạy thật"`
-    - `--rerun` — desc: `"Chạy lại test cũ, không sinh mới (bỏ qua check thay đổi spec)"`
+  - Ghi chú: `--rerun` (chạy lại test cũ) không nằm trong picker — gõ trực tiếp `--rerun` trong `$ARGUMENTS` nếu cần (đã auto-detect ở A0).
 
 > Lưu ý: nếu user đã truyền sẵn cả input lẫn `--project` trong `$ARGUMENTS` thì A2 chỉ còn câu MODE (hoặc bỏ qua luôn nếu user cũng đã truyền cờ mode).
 
@@ -116,7 +120,7 @@ In ra chat 1 dòng xác nhận (KHÔNG chờ confirm, chạy luôn):
 
 ## Phần B — Thực thi pipeline ai-test
 
-1. **Đọc TOÀN BỘ** `/home/user/ai-automation-test/skills/ai-test/SKILL.md` trong **MỘT lần Read** (offset=1, limit=2000). Đọc thiếu = bỏ sót Bước 1b/3b/luật env → test SAI.
+1. **Đọc TOÀN BỘ** `$APP_ROOT/skills/ai-test/SKILL.md` trong **MỘT lần Read** (offset=1, limit=2000). Đọc thiếu = bỏ sót Bước 1b/3b/luật env → test SAI.
 2. Thực hiện **đúng quy trình 7 bước** trong file đó, coi chuỗi tham số đã ráp ở A3 là `$ARGUMENTS` đầu vào của `ai-test`.
 3. Từ đây là **auto mode** — không hỏi giữa chừng (trừ trường hợp `ai-test` quy định phải confirm: đổi env thật, hoặc data bắt buộc phải thật không fake được; và `--interactive` nếu user đã chọn).
 

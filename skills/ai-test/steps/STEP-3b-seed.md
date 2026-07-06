@@ -1,6 +1,6 @@
 # Bước 3b — Chi tiết: Kiểm tra data thiếu → tự động xử lý
 
-> 📊 **Dashboard:** `bash /home/user/ai-automation-test/automation/scripts/update-status.sh 3 s3b "<name>" "Checking and seeding test data..." 0 normal`
+> 📊 **Dashboard:** `bash $APP_ROOT/automation/scripts/update-status.sh 3 s3b "<name>" "Checking and seeding test data..." 0 normal`
 
 Trước khi sinh plan/code, rà từng scenario để xác định data có đủ không:
 - Account/role/permission cần dùng
@@ -86,9 +86,9 @@ Chỉ INSERT vào column thực sự tồn tại. Column không tồn tại → 
 
 Sau khi test hoàn thành, move seed file về thư mục dùng chung:
 ```bash
-mkdir -p /home/user/ai-automation-test/automation/seeds/<project-name>
+mkdir -p $APP_ROOT/automation/seeds/<project-name>
 mv projects/<name>/tests/seed*.spec.ts \
-   /home/user/ai-automation-test/automation/seeds/<project-name>/
+   $APP_ROOT/automation/seeds/<project-name>/
 ```
 Xóa khỏi `projects/<name>/tests/` sau khi move.
 

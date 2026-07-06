@@ -26,7 +26,7 @@ fi
 ## Bước 7b: Sinh AI_REPORT.md
 
 > ⚠️ **Path bắt buộc:**
-> `/home/user/ai-automation-test/automation/projects/<name>/test-results/runs/<run-id>/AI_REPORT.md`
+> `$APP_ROOT/automation/projects/<name>/test-results/runs/<run-id>/AI_REPORT.md`
 > Run ID lấy từ output run-test.sh, KHÔNG tự đặt.
 
 **Chạy trước khi viết** để xác nhận path đúng:
@@ -127,7 +127,7 @@ ls projects/<name>/test-results/runs/<run-id>/artifacts/
 
 ---
 
-📊 HTML Report: `cd /home/user/ai-automation-test/automation && ./scripts/show-report.sh <name> <run-id>`
+📊 HTML Report: `cd $APP_ROOT/automation && ./scripts/show-report.sh <name> <run-id>`
 ```
 
 ## Quy tắc bắt buộc khi viết report
@@ -149,5 +149,5 @@ ls projects/<name>/test-results/runs/<run-id>/artifacts/
 🎬 Full session: <path theo OS>/full-session.mp4
 🎬 TC-1 <tên>: <path>/<exact-dir>/video.mp4
    (liệt kê từng test — KHÔNG dùng placeholder)
-📊 HTML: cd /home/user/ai-automation-test/automation && ./scripts/show-report.sh <name> <run-id>
+📊 HTML: cd $APP_ROOT/automation && ./scripts/show-report.sh <name> <run-id>
 ```

@@ -55,7 +55,12 @@ Report only:
 ## Rules
 
 - Read spec before reading error
-- One fix at a time, retest after each
+- One ROOT CAUSE at a time — a single root cause may span multiple TCs (e.g. a shared
+  helper/selector). Fix it once, then retest ALL affected TCs together in one rerun
+  (`--grep "TC-14:|TC-20:"`). Do not bundle fixes for UNRELATED root causes in one pass.
+- If a project has `SCREENS.md` and you fix a selector because the UI changed, write the new
+  selector back into `projects/<name>/SCREENS.md` so future runs don't repeat the same failure.
+  Only interaction details (selectors/flow) — never expected values.
 - When in doubt → app bug, do not touch test logic
 - Never use `waitForNetworkIdle` or deprecated APIs
 - Do not ask questions

@@ -23,7 +23,7 @@ Tab ghi = giá trị `--sheet-tab` từ Bước 1. Không có `--sheet-tab` → 
 > ⚠️ **Sheet tiếng Nhật hoặc có nhiều cột kết quả (結果1, 結果2...):** Script auto-detect có thể match nhầm cột spec (`期待結果`) thay vì cột kết quả test (`結果2`). Khi sheet dùng tiếng Nhật hoặc có pattern "結果N", **BẮT BUỘC chỉ định tường minh** `--result-col="結果2"` (hoặc tên cột user yêu cầu). **KHÔNG để auto-detect quyết định.**
 
 ```bash
-cd /home/user/ai-automation-test/automation
+cd $APP_ROOT/automation
 node scripts/write-results-to-sheet.mjs \
   --sheet="$SHEET_URL" \
   --project=<name> \
@@ -67,7 +67,7 @@ node scripts/write-results-to-sheet.mjs \
 ## Ghi về Google Doc (`--doc=<url>`)
 
 ```bash
-cd /home/user/ai-automation-test/automation
+cd $APP_ROOT/automation
 node scripts/write-results-to-doc.mjs \
   --doc="<doc-url>" \
   --project=<name> \

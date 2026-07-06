@@ -10,7 +10,8 @@ set -euo pipefail
 PROJECT_NAME="${1:?Usage: $0 <project_name> [args...]}"
 shift || true
 
-AUTOMATION_DIR="/home/user/ai-automation-test/automation"
+# Tự định vị: script nằm ở <root>/automation/scripts/ → AUTOMATION_DIR = 1 cấp trên
+AUTOMATION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_DIR="$AUTOMATION_DIR/projects/$PROJECT_NAME"
 RUN_ID="${TEST_RUN_ID:-$(date +%d_%m_%Y_%H_%M_%S_%3N)}"
 RUN_DIR="$PROJECT_DIR/test-results/runs/$RUN_ID"
@@ -47,6 +48,17 @@ export TEST_FAST="${TEST_FAST:-}"
 export TEST_LIVE="${TEST_LIVE:-}"
 
 mkdir -p "$RUN_DIR"
+
+# Guard: từ chối nếu run dir đã có artifacts — ngăn heal rerun ghi đè main run
+if [ -d "$RUN_DIR/artifacts" ] && [ -n "$(ls -A "$RUN_DIR/artifacts" 2>/dev/null)" ]; then
+  echo "[run-test] ❌ RUN_ID '$RUN_ID' đã có artifacts tại:"
+  echo "           $RUN_DIR/artifacts"
+  echo "[run-test] Dùng HEAL_RUN_ID riêng: TEST_RUN_ID=\"${RUN_ID}_h1\" ./scripts/run-test.sh ..."
+  exit 1
+fi
+
+# Lint gate: chặn fake assertion / test.skip che giấu bug (Rule #15) trước khi chạy
+"$AUTOMATION_DIR/scripts/lint-test.sh" "$PROJECT_NAME"
 
 echo "[run-test] 🐳 Project: '$PROJECT_NAME' | Run ID: $RUN_ID"
 [ -n "$TEST_FAST" ] && echo "[run-test] ⚡ Fast mode ON (no video/trace)"
@@ -102,6 +114,6 @@ echo ""
 echo "[run-test] 📁 Run dir: $RUN_DIR"
 [ -f "$RUN_DIR/results.json" ]     && echo "[run-test] 📄 JSON: $RUN_DIR/results.json"
 [ -d "$RUN_DIR/artifacts" ]        && echo "[run-test] 📁 Artifacts: $RUN_DIR/artifacts"
-[ -d "$RUN_DIR/playwright-report" ] && echo "[run-test] 📊 HTML: cd $AUTOMATION_DIR && docker compose run --rm playwright npx playwright show-report $RUN_DIR/playwright-report"
+[ -d "$RUN_DIR/playwright-report" ] && echo "[run-test] 📊 HTML: cd $AUTOMATION_DIR && ./scripts/show-report.sh $PROJECT_NAME $RUN_ID"
 
 exit $EXIT_CODE

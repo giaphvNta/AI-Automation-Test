@@ -63,7 +63,7 @@ docker --version
 ### Bước 2: Chạy setup script
 
 ```bash
-cd /home/user/ai-automation-test
+cd ~/ai-automation-test   # thay bằng nơi bạn clone repo
 ./setup.sh
 ```
 
@@ -75,7 +75,7 @@ Script tự động:
 
 **Gỡ cài đặt** (xóa slash commands, giữ nguyên repo + Docker image):
 ```bash
-cd /home/user/ai-automation-test
+cd ~/ai-automation-test   # thay bằng nơi bạn clone repo
 ./setup.sh --uninstall
 ```
 Reload VSCode sau khi gỡ: `Ctrl+Shift+P` → **Developer: Reload Window**
@@ -85,7 +85,7 @@ Reload VSCode sau khi gỡ: `Ctrl+Shift+P` → **Developer: Reload Window**
 Image được build local (bao gồm ffmpeg + VNC tools — dùng cho video + live view):
 
 ```bash
-cd /home/user/ai-automation-test/automation
+cd ~/ai-automation-test/automation   # thay bằng nơi bạn clone repo
 docker compose build playwright
 ```
 
@@ -205,7 +205,7 @@ AI đọc input → trích test scenarios
     ↓
 🎭 Generator viết test code (.spec.ts)
     ↓
-Docker headless Chromium chạy test (2 workers song song)
+Docker headless Chromium chạy test (1 worker tuần tự — tránh xung đột app state; override bằng TEST_WORKERS)
     ↓
 Fail? → 🎭 Healer phân tích lỗi + tự fix + chạy lại (≤ 3 lần)
     ↓
@@ -248,7 +248,7 @@ Có 3 chế độ phù hợp với nhu cầu khác nhau:
 - ✅ Ghi trace để debug
 - ✅ Auto-heal tối đa 3 lần
 - ✅ HTML report đầy đủ
-- 2 workers song song
+- 1 worker tuần tự (project có tests độc lập → set `TEST_WORKERS` trong `projects/<name>/.env`)
 
 ### Fast — Nhanh + tiết kiệm token
 
@@ -397,6 +397,7 @@ Mỗi khi AI chạy 1 bước trong pipeline, nó ghi trạng thái vào file `.
 | `--only=<test>` | Không | — | Chỉ chạy 1 test theo tên |
 | `--fast` | Không | false | Nhanh + ít token: tắt video/trace, 4 workers, bỏ heal |
 | `--live` | Không | false | Xem live qua `http://localhost:6080/vnc.html` |
+| `--screens` | Không | false | Dùng knowledge map màn hình `projects/<name>/SCREENS.md` (URL/selector/flow + data recipe) → viết test nhanh hơn, chính xác hơn, ít heal hơn. Lần đầu crawl 1 lần sinh file; UI đổi thì tự cập nhật ngược khi heal. Chỉ chứa cách tương tác, **không** chứa expected value |
 | `--sheet=<url>` | Không | — | Ghi kết quả vào Google Sheet sau khi test xong. **Phải truyền flag này mới ghi** |
 | `--sheet-tab=<name>` | Không | auto-detect | Tab cụ thể để ghi kết quả |
 | `--doc=<url>` | Không | — | Append kết quả vào Google Doc sau khi test xong. **Phải truyền flag này mới ghi** |
@@ -738,7 +739,9 @@ node scripts/write-results-to-doc.mjs \
     ├── scripts/
     │   ├── run-test.sh              ← Wrapper chạy test (normal / fast / live)
     │   ├── live-entrypoint.sh       ← Khởi VNC bên trong container (dùng khi --live)
-    │   ├── show-report.sh           ← Mở HTML report
+    │   ├── show-report.sh           ← Mở HTML report (tự chọn run mới nhất theo mtime)
+    │   ├── convert-videos.sh        ← Bước 6b: webm→mp4 song song + full-session đúng thứ tự
+    │   ├── lint-test.sh             ← Gate chặn fake assertion / test.skip (Rule #15)
     │   ├── start-dashboard.sh       ← Khởi HTTP server cho dashboard
     │   ├── update-status.sh         ← Ghi trạng thái bước hiện tại cho dashboard
     │   ├── load-google-sheet.mjs    ← Đọc Google Sheet

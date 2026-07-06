@@ -9,7 +9,7 @@ set -euo pipefail
 PROJECT_NAME="${1:?Usage: $0 <project_name> [run_id]}"
 RUN_ID="${2:-}"
 
-AUTOMATION_DIR="/home/user/ai-automation-test/automation"
+AUTOMATION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNS_DIR="$AUTOMATION_DIR/projects/$PROJECT_NAME/test-results/runs"
 
 if [ ! -d "$RUNS_DIR" ]; then
@@ -18,8 +18,9 @@ if [ ! -d "$RUNS_DIR" ]; then
 fi
 
 # Tự chọn run mới nhất nếu không truyền run_id
+# Sort theo mtime — KHÔNG sort theo tên vì RUN_ID format DD_MM_YYYY không sort được theo thời gian
 if [ -z "$RUN_ID" ]; then
-  RUN_ID="$(find "$RUNS_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | tail -n 1)"
+  RUN_ID="$(find "$RUNS_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %f\n' | sort -n | tail -n 1 | cut -d' ' -f2)"
 fi
 
 REPORT_DIR="$AUTOMATION_DIR/projects/$PROJECT_NAME/test-results/runs/$RUN_ID/playwright-report"
