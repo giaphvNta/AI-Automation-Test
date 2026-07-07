@@ -37,7 +37,7 @@ PROJECTS      = $APP_ROOT/automation/projects
 Tách từ `$ARGUMENTS`:
 - **input** = token đầu tiên KHÔNG bắt đầu bằng `--` (URL / path / mô tả trong ngoặc kép).
 - **project** = giá trị của `--project=...`.
-- **mode flags** = các cờ boolean đã có (`--fast`, `--live`, `--screens`, `--interactive`, `--rerun`).
+- **mode flags** = các cờ boolean đã có (`--fast`, `--live`, `--screens`, `--kg`, `--kg-rebuild`, `--interactive`, `--rerun`).
 - **passthrough** = mọi cờ khác (`--target=`, `--max-heal=`, `--only=`, `--sheet=`, `--sheet-tab=`, `--doc=`) → giữ nguyên, KHÔNG hỏi.
 
 Xác định `MISSING_INPUT` (chưa có input) và `MISSING_PROJECT` (chưa có `--project`).
@@ -68,17 +68,24 @@ Gộp tất cả câu hỏi cần thiết vào **một** lần gọi AskUserQues
   - header: `"Project"`, multiSelect: false
   - options: 4 project mới nhất từ A1. (Nếu chỉ có <2 project, vẫn đủ vì luôn có "Other".)
 
-- **Câu MODE** (luôn hỏi — cho phép bỏ trống = normal mode):
-  - question: `"Chọn chế độ chạy (chọn nhiều hoặc bỏ trống = Normal đầy đủ)"`
-  - header: `"Chế độ"`, multiSelect: **true**
-  - options (tối đa 4 — AskUserQuestion không cho quá 4):
+- **Câu TỐC ĐỘ/HIỂN THỊ** (luôn hỏi — **radio, chọn 1**):
+  - question: `"Chọn chế độ chạy (chỉ 1 — --fast và --live loại trừ nhau)"`
+  - header: `"Chế độ"`, multiSelect: **false**
+  - options (single-select — TUYỆT ĐỐI không cho chọn cả --fast lẫn --live):
+    - `Normal (mặc định)` — desc: `"Headless đầy đủ: video/trace/heal + report chi tiết"`
     - `--fast` — desc: `"Nhanh, tiết kiệm token: tắt video/trace, 4 workers, bỏ heal, report 3 dòng"`
-    - `--live` — desc: `"Xem trực tiếp qua VNC (http://localhost:6080/vnc.html), chậm 600ms/action"`
-    - `--screens` — desc: `"Dùng knowledge map màn hình (SCREENS.md): tái dùng selector/flow/data recipe → nhanh + chính xác + ít heal. Lần đầu crawl 1 lần"`
-    - `--interactive` — desc: `"Confirm từng bước (plan/code) trước khi chạy thật"`
-  - Ghi chú: `--rerun` (chạy lại test cũ) không nằm trong picker — gõ trực tiếp `--rerun` trong `$ARGUMENTS` nếu cần (đã auto-detect ở A0).
+    - `--live` — desc: `"Xem trực tiếp qua VNC (http://localhost:6080/vnc.html), chậm 600ms/action. Browser chạy trong container — KHÔNG đụng host"`
+  - Map: chọn `Normal` → không thêm cờ tốc độ nào.
 
-> Lưu ý: nếu user đã truyền sẵn cả input lẫn `--project` trong `$ARGUMENTS` thì A2 chỉ còn câu MODE (hoặc bỏ qua luôn nếu user cũng đã truyền cờ mode).
+- **Câu TỐI ƯU** (luôn hỏi — **multiSelect, chọn nhiều/bỏ trống**):
+  - question: `"Bật tối ưu authoring? (chọn nhiều hoặc bỏ trống)"`
+  - header: `"Tối ưu"`, multiSelect: **true**
+  - options:
+    - `--screens` — desc: `"Dùng knowledge map màn hình (SCREENS.md): tái dùng selector/flow/data recipe → nhanh + chính xác + ít heal. Lần đầu crawl 1 lần"`
+    - `--kg` — desc: `"Dùng Knowledge Graph (endpoint/route index từ source bằng Tree-sitter) → giảm token pha authoring. Cần build 1 lần: npm run kg:build"`
+  - Ghi chú: `--interactive` (confirm từng bước), `--rerun` (chạy lại test cũ), `--kg-rebuild` (ép build lại KG) — gõ trực tiếp trong `$ARGUMENTS` hoặc qua "Other" nếu cần (đã auto-detect ở A0). `--fast`✕`--live` đã tách radio nên không thể chọn cả hai.
+
+> Lưu ý: nếu user đã truyền sẵn cả input lẫn `--project` trong `$ARGUMENTS` thì A2 chỉ còn 2 câu (TỐC ĐỘ + TỐI ƯU), hoặc bỏ qua câu nào user đã truyền sẵn cờ tương ứng. Nếu `$ARGUMENTS` lỡ có cả `--fast` và `--live` → cảnh báo và yêu cầu chọn 1.
 
 ### A2b. Hỏi thêm khi input là Google Sheet (chỉ khi nguồn = Google Sheet)
 

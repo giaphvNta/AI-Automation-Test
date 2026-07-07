@@ -10,7 +10,10 @@
     "test": "./scripts/run-test.sh demo",
     "test:project": "./scripts/run-test.sh",
     "report": "./scripts/show-report.sh",
-    "sheet:load": "node scripts/load-google-sheet.mjs"
+    "sheet:load": "node scripts/load-google-sheet.mjs",
+    "kg:build": "node scripts/knowledge/build-knowledge.mjs",
+    "kg:tokens": "node scripts/measure-tokens.mjs",
+    "kg:screens": "node scripts/knowledge/gen-screens.mjs"
   },
   "keywords": [],
   "author": "",
@@ -19,7 +22,9 @@
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@types/node": "^25.9.1",
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "tree-sitter-wasms": "^0.1.12",
+    "web-tree-sitter": "^0.22.6"
   },
   "dependencies": {
     "mysql2": "^3.22.4"

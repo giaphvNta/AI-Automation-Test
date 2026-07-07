@@ -10,6 +10,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/token-stop-hook.sh\"",
+            "timeout": 20
+          }
+        ]
+      }
     ]
   }
 }

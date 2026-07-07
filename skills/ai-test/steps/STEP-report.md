@@ -2,6 +2,11 @@
 
 > ⚠️ **BẮT BUỘC — KHÔNG SKIP.** Context dài, token nhiều, heal exhausted đều KHÔNG phải lý do skip. Luôn sinh AI_REPORT.md và lưu source-meta.
 
+> ⚠️ **CẬP NHẬT DASHBOARD (BẮT BUỘC — hay bị sót):**
+> - Ngay khi vào bước report: `bash scripts/update-status.sh 7 s7 "<name>" "Generating report..." 0 <mode>`
+> - Sau khi xong HẾT (report + 7c + 7d + 7e): `bash scripts/update-status.sh 7 s7 "<name>" "Done" 0 <mode> done`
+> Thiếu lệnh `done` cuối → dashboard kẹt ở "Converting videos..." dù đã chạy xong. `<mode>` = `live` nếu `--live`, else `normal`.
+
 ## Bước 7a: Detect OS → chọn format path
 
 ```bash
@@ -40,6 +45,15 @@ ls "$RUN_DIR/results.json" && echo "✅ Path OK" || echo "❌ SAI PATH — dừn
 ls projects/<name>/test-results/runs/<run-id>/artifacts/
 ```
 
+**Lấy số token tiêu thụ (điền vào section 💰):**
+```bash
+# Đo token phiên hiện tại (cả lần chạy test). Nếu phiên dùng chung nhiều việc,
+# thêm --from "<ISO lúc bắt đầu run>" để bó đúng 1 run.
+npm run kg:tokens -- --latest
+```
+Lấy các dòng `input/output/cache_creation/cache_read/TỔNG (billed)` điền vào bảng 💰.
+Nếu không đọc được log (hiếm) → ghi "không đo được" thay vì bỏ trống section.
+
 ### Template AI_REPORT.md — PHẢI theo đúng format này
 
 ```markdown
@@ -61,6 +75,21 @@ ls projects/<name>/test-results/runs/<run-id>/artifacts/
 | ❌ Fail | y |
 | ⚠️ Flaky (healed by retry) | z |
 | 🔧 Healed | h |
+
+---
+
+## 💰 Token tiêu thụ (cả lần chạy)
+
+| Loại | Token |
+|------|-------|
+| input | <i> |
+| output | <o> |
+| cache_creation | <cc> |
+| cache_read | <cr> |
+| **TỔNG (billed)** | **<total>** |
+
+> **Mặc định luôn đo** mỗi lần chạy (không phải cờ, không opt-in) bằng `npm run kg:tokens` (đọc log phiên Claude Code). Nếu chạy `--kg` thì ghi chú thêm để so A/B.
+> **Số cuối cùng chính xác** do **Stop hook** (`.claude/hooks/token-stop-hook.sh`) tự ghi vào `<run-dir>/token.json` khi phiên kết thúc — deterministic, đủ cả phần đuôi run + sub-agent. Con số 💰 trong report này là snapshot lúc viết report (có thể thiếu phần sau report) → **dùng `token.json` làm nguồn chuẩn khi so A/B.**
 
 ---
 
@@ -134,7 +163,7 @@ ls projects/<name>/test-results/runs/<run-id>/artifacts/
 
 - **Phần văn bản mô tả viết bằng TIẾNG VIỆT** — summary, phân tích lỗi, root cause, hướng fix, ghi chú. KHÔNG viết bằng tiếng Anh.
 - **Giữ nguyên nhãn cố định**: `Run ID`, `Date`, `Mode`, `Total`, `Pass`, `Fail`, tên file, log, code.
-- **BẮT BUỘC đủ 3 section chính**: `## 📊 Kết quả tổng hợp`, `## 📂 Đường dẫn`, `## 🎬 Video từng test case`. Thiếu bất kỳ cái nào = report KHÔNG hợp lệ → phải sinh lại.
+- **BẮT BUỘC đủ 4 section chính**: `## 📊 Kết quả tổng hợp`, `## 💰 Token tiêu thụ`, `## 📂 Đường dẫn`, `## 🎬 Video từng test case`. Thiếu bất kỳ cái nào = report KHÔNG hợp lệ → phải sinh lại.
 - Path video phải là `.mp4` (đã convert ở Bước 6b). Tên thư mục lấy từ `ls`, không tự đặt.
 - Mỗi test case một dòng riêng trong bảng video.
 - Section headers phải có emoji: `## 📊`, `## 📂`, `## 🎬`, `## ❌`, `## ⚠️`, `## ⛔`.
@@ -144,6 +173,7 @@ ls projects/<name>/test-results/runs/<run-id>/artifacts/
 ```
 ✅ Test xong — project `<name>`
 📊 Total: N | ✅ Pass: x | ❌ Fail: y | 🔧 Healed: z
+💰 Token: <total> (billed)
 
 📝 Báo cáo: <path theo OS>
 🎬 Full session: <path theo OS>/full-session.mp4

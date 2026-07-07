@@ -20,6 +20,9 @@ application behavior.
   returns something different from the spec, keep the spec value — the test SHOULD fail
   and expose the app bug. Do NOT adjust the assertion to match what you observed.
 - Do NOT read app source code, app config, or app DB to derive expected values.
+- Knowledge Graph (when `--kg` is on): if `projects/<name>/knowledge/api.json` exists, read it to find
+  an endpoint's method/path (and its `source` = `file:line`) INSTEAD of grepping the app source.
+  This is interaction knowledge only (how to call) — expected values still come from the spec verbatim.
 - Every test MUST carry a traceability comment above its main assertion:
   `// SPEC: <row/section> — "<verbatim expected outcome>"`
 - Banned patterns (never generate): `expect(true).toBe(true)`, `expect(1).toBe(1)`,

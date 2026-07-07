@@ -8,3 +8,4 @@ projects/*/.env
 projects/*/.auth/
 projects/*/test-results/
 projects/*/playwright-report/
+projects/*/knowledge/

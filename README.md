@@ -14,10 +14,12 @@
 5. [Xem kết quả](#xem-kết-quả)
 6. [Dashboard real-time](#dashboard-real-time)
 7. [Flags tham chiếu](#flags-tham-chiếu)
-8. [Thêm project mới](#thêm-project-mới)
-9. [Setup Google Sheets / Docs](#setup-google-sheets--docs)
-10. [Cấu trúc thư mục](#cấu-trúc-thư-mục)
-11. [Troubleshooting](#troubleshooting)
+8. [Knowledge Graph (`--kg`)](#knowledge-graph--kg)
+9. [Đo token tiêu thụ](#đo-token-tiêu-thụ-bằng-chứng-ab)
+10. [Thêm project mới](#thêm-project-mới)
+11. [Setup Google Sheets / Docs](#setup-google-sheets--docs)
+12. [Cấu trúc thư mục](#cấu-trúc-thư-mục)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -183,7 +185,8 @@ Không muốn nhớ cú pháp flag? Gõ `/ai-test-i` — AI sẽ **hỏi qua pic
 → AI lần lượt hiện picker để bạn chọn:
 1. **Nguồn test** — dán Google Sheet URL / URL web / file spec, hoặc gõ mô tả.
 2. **`--project`** — chọn từ danh sách project có sẵn (hoặc nhập project mới).
-3. **Chế độ** — tick nhiều: `--fast`, `--live`, `--interactive`, `--rerun` (bỏ trống = Normal).
+3. **Tốc độ/hiển thị** — chọn **1**: Normal / `--fast` / `--live` (radio — `--fast` và `--live` loại trừ nhau).
+4. **Tối ưu** — tick nhiều/bỏ trống: `--screens`, `--kg`. (`--interactive`/`--rerun`/`--kg-rebuild` gõ trực tiếp nếu cần.)
 
 Sau khi đủ tham số, `/ai-test-i` chạy **đúng pipeline 7 bước của `/ai-test`** — mọi quy tắc (seed, heal, report, video) giống hệt. Bạn cũng có thể truyền sẵn một phần flag, AI chỉ hỏi phần còn thiếu:
 ```
@@ -398,11 +401,58 @@ Mỗi khi AI chạy 1 bước trong pipeline, nó ghi trạng thái vào file `.
 | `--fast` | Không | false | Nhanh + ít token: tắt video/trace, 4 workers, bỏ heal |
 | `--live` | Không | false | Xem live qua `http://localhost:6080/vnc.html` |
 | `--screens` | Không | false | Dùng knowledge map màn hình `projects/<name>/SCREENS.md` (URL/selector/flow + data recipe) → viết test nhanh hơn, chính xác hơn, ít heal hơn. Lần đầu crawl 1 lần sinh file; UI đổi thì tự cập nhật ngược khi heal. Chỉ chứa cách tương tác, **không** chứa expected value |
+| `--kg` | Không | false | Dùng **Knowledge Graph** (index endpoint/route/dependency từ source app bằng Tree-sitter) → agent query `projects/<name>/knowledge/*.json` thay vì grep source, giảm token pha authoring. Cần build 1 lần: `npm run kg:build -- <name> --src <app-src>`. Chỉ chứa cách tương tác, **không** chứa expected value. Xem [Knowledge Graph](#knowledge-graph--kg) |
+| `--kg-rebuild` | Không | false | Đi kèm `--kg`: ép build lại Knowledge Graph trước khi dùng (khi source app đã đổi). Không có flag này → chỉ cảnh báo nếu graph cũ, dev tự quyết |
 | `--sheet=<url>` | Không | — | Ghi kết quả vào Google Sheet sau khi test xong. **Phải truyền flag này mới ghi** |
 | `--sheet-tab=<name>` | Không | auto-detect | Tab cụ thể để ghi kết quả |
 | `--doc=<url>` | Không | — | Append kết quả vào Google Doc sau khi test xong. **Phải truyền flag này mới ghi** |
 
 > **Ghi ngược chỉ khi có flag:** Input là Google Sheet/Doc **không tự động ghi ngược** — phải truyền `--sheet=<url>` hoặc `--doc=<url>` tường minh. Xem chi tiết tại [Ghi kết quả ngược về Sheet](#ghi-kết-quả-test-ngược-về-google-sheet).
+
+---
+
+## Knowledge Graph (`--kg`)
+
+Index endpoint/route/dependency từ source app bằng **Tree-sitter** để agent query thay vì grep
+source → **giảm token pha authoring**. Graph là JSON per-project, **KHÔNG commit** (mỗi dev tự build
+local vì cần source app).
+
+**Ngôn ngữ hỗ trợ:** PHP (Laravel), Ruby (Rails), Python (FastAPI/Flask), JS (Express), Vue.
+
+**Build 1 lần cho project:**
+```bash
+cd automation
+npm run kg:build -- <project> --src <đường-dẫn-source-app>
+# ví dụ: npm run kg:build -- aucnet-flowers-web --src /home/user/aucnet-flowers-web
+```
+Output: `projects/<project>/knowledge/{api,ui,deps,meta}.json`.
+
+**Dùng khi test:** thêm `--kg` vào lệnh. Source app đổi → dùng `--kg-rebuild` (không có → chỉ cảnh báo, dev tự quyết).
+
+**Sinh skeleton SCREENS.md từ graph** (0 token, deterministic):
+```bash
+npm run kg:screens -- <project>
+```
+
+Chi tiết: `automation/scripts/knowledge/README.md`.
+
+## Đo token tiêu thụ (bằng chứng A/B)
+
+Token tiêu thụ ở **pha authoring** (agent đọc source/DOM), không phải lúc chạy test. Đo bằng log
+phiên Claude Code thật:
+```bash
+cd automation
+npm run kg:tokens -- --latest      # đo phiên mới nhất
+npm run kg:tokens -- --list        # liệt kê phiên
+```
+`TỔNG (billed)` = input + output + cache. AI_REPORT.md cũng tự log mục 💰 token (snapshot lúc report).
+
+**Số chuẩn để so A/B**: Stop hook `.claude/hooks/token-stop-hook.sh` tự ghi `<run-dir>/token.json`
+khi phiên kết thúc — đủ cả phần đuôi run + sub-agent, không phụ thuộc agent nhớ đo. Lấy `total_billed`
+trong `token.json` khi so sánh.
+
+So A/B: chạy cùng 1 TC — 1 lần không `--kg`, 1 lần có `--kg` (mỗi lần **1 phiên riêng**) → so `total_billed`.
+Chi tiết: `automation/scripts/knowledge/MEASURE-TOKENS.md`.
 
 ---
 

@@ -71,6 +71,8 @@ Flags:
 - `--sheet-tab=<name>` — tên tab (vd: `--sheet-tab="Test Cases"`). Auto-detect nếu bỏ qua.
 - `--doc=<url>` — ghi kết quả vào Google Doc sau test (Bước 7d). Cần `service-auth.json`.
 - `--screens` — **bật cơ chế SCREENS.md** (knowledge map màn hình): tái dùng URL/selector/flow + data recipe đã lưu để viết test nhanh hơn, chính xác hơn, ít heal hơn. Lần đầu chưa có file → crawl 1 lần sinh ra. → **Đọc `skills/ai-test/steps/STEP-screens.md`**. Không có flag → bỏ qua, giữ hành vi cũ.
+- `--kg` — **bật Knowledge Graph** (index endpoint/route từ source bằng Tree-sitter): agent query `projects/<name>/knowledge/api.json` để biết method/path/`file:line` thay vì grep source → giảm token pha authoring. Chưa có file → build 1 lần (xem Bước 5). → **Đọc `skills/ai-test/steps/STEP-knowledge-graph.md`**. Không có flag → bỏ qua, giữ hành vi cũ.
+- `--kg-rebuild` — chỉ có tác dụng khi đi kèm `--kg`: **ép build lại** Knowledge Graph trước khi dùng (khi source app đã đổi). Không có flag này → AI CHỈ cảnh báo nếu graph cũ, KHÔNG tự rebuild (dev tự quyết).
 
 Input types:
 | Dạng | Nhận diện | Loader |
@@ -229,6 +231,16 @@ Auto mode → Bước 5. Interactive mode → hiển thị plan, chờ OK.
 
 **Đọc HTML/view trước khi viết test** — xác nhận: submit button text, flash message selector, nav link text, form field names.
 Nếu có `--screens` và SCREENS.md đã có selector/flow màn cần dùng → lấy thẳng từ đó, KHỎI browse lại (nhanh hơn, ít heal hơn).
+
+**Nếu có `--kg` (Knowledge Graph — endpoint/route từ source):**
+- File `projects/<name>/knowledge/api.json` CHƯA có → build 1 lần (cần source app; đường dẫn lấy từ mount `/app-src` trong `projects/<name>/docker-compose.override.yml` hoặc truyền tay):
+  `npm run kg:build -- <name> --src <đường-dẫn-source-app>`  (chạy trong `automation/`)
+- File ĐÃ có → kiểm tra source có đổi không: `npm run kg:build -- <name> --src <app-src> --check`.
+  - Exit 0 (FRESH) → dùng graph hiện có.
+  - Exit 1 (STALE) → **CẢNH BÁO dev** (in rõ): "⚠️ Knowledge Graph của `<name>` đã cũ (source app đổi kể từ lần build lúc <meta.generated_at>). Endpoint/route trong graph có thể lệch. Chạy lại kèm `--kg-rebuild` để cập nhật." Sau đó **VẪN dùng graph cũ** và tiếp tục — KHÔNG tự rebuild. Dev tự quyết.
+- Có `--kg-rebuild` → build lại trước khi dùng (bất kể FRESH/STALE), rồi mới query.
+- File ĐÃ có → khi cần biết endpoint (method/path) cho TC dạng API/HTTP → **đọc `api.json` thay vì grep source app**. Mỗi node có `source` = `file:line` để mở đúng chỗ khi cần chi tiết.
+- ⚠️ Graph CHỈ cho biết *endpoint tồn tại ở đâu* (cách gọi). Expected value (status code, body kỳ vọng) VẪN lấy từ spec/sheet — KHÔNG lấy từ graph. Xem STEP-knowledge-graph.md.
 
 Quy tắc viết test:
 - Selector: `getByRole` > `getByLabel` > `getByText` > CSS
@@ -486,5 +498,6 @@ User từ chối → đánh dấu TC là BLOCKED.
 - `skills/ai-test/steps/STEP-report.md` — template AI_REPORT.md đầy đủ
 - `skills/ai-test/steps/STEP-7d-sheet.md` — ghi kết quả vào Google Sheet/Doc
 - `skills/ai-test/steps/STEP-screens.md` — cơ chế SCREENS.md (knowledge map màn hình, opt-in `--screens`)
-- Rule `nta-no-screen-capture.md` — headless only
+- `skills/ai-test/steps/STEP-knowledge-graph.md` — Knowledge Graph endpoint/route từ source (Tree-sitter, opt-in `--kg`)
+- `skills/ai-test/rules/nta-no-screen-capture.md` — cấm screenshot/mở browser **trên host**; browser trong container (headless / `--live` qua noVNC) được phép. Đi kèm repo cho mọi dev
 - Setup: `$APP_ROOT/setup.sh`

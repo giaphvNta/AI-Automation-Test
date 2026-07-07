@@ -11,7 +11,11 @@
 
 Chỉ chạy cơ chế này khi có flag `--screens`. Không có flag → bỏ qua hoàn toàn, giữ hành vi cũ.
 
-File: `projects/<name>/SCREENS.md` (1 file/project, commit chung repo để mọi dev tái dùng).
+File: `projects/<name>/SCREENS.md` (1 file/project).
+
+> ⚠️ `automation/projects/*` bị **gitignore** (trừ `demo/`) vì chứa data khách hàng → SCREENS.md
+> của project khách hàng là **local per-clone**, KHÔNG commit. Lần đầu mỗi máy chạy `--screens` sẽ
+> tự crawl sinh lại (chi phí 1 lần). Nếu team muốn chia sẻ, tự quyết cơ chế riêng (vd lưu nơi trackable).
 
 ## Luồng khi có `--screens`
 

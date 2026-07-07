@@ -13,7 +13,7 @@
 2. **`--interactive`** — bật confirm trước khi chạy test thật.
 3. **CWD bắt buộc** `$APP_ROOT/automation/`.
 4. **`--project=<name>` BẮT BUỘC** — không tự đoán, hỏi nếu thiếu.
-5. **Headless only** — KHÔNG mở browser, KHÔNG screenshot màn hình host (nta-no-screen-capture.md).
+5. **Không GUI/screenshot trên HOST** — KHÔNG mở browser trên host, KHÔNG screenshot màn hình host. Browser chạy **trong container Docker** (headless mặc định, hoặc `--live` = headed + noVNC để user tự mở URL) thì **ĐƯỢC PHÉP** — không đụng host. Xem `skills/ai-test/rules/nta-no-screen-capture.md`.
 6. **Output: in path file** — dev tự mở, KHÔNG mở visual trong VSCode.
 7. **Thiếu data → tự xử lý** — fake data hoặc seed tự động, KHÔNG hỏi user (trừ Rule #15).
 8. **`--fast`** = `TEST_FAST=1`. Nghĩa: tắt video/trace, 4 workers, skip heal, compact report 3 dòng. KHÔNG có nghĩa "skip regeneration".
