@@ -24,7 +24,8 @@ import { runExtractor } from './extractors/index.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const AUTOMATION_DIR = resolve(__dirname, '..', '..');
 
-const IGNORE_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor', '.next', 'target', '__pycache__']);
+const IGNORE_DIRS = new Set(['node_modules', '.git', 'dist', 'build', 'vendor', '.next', 'target',
+  '__pycache__', 'bower_components', 'public', 'storage', 'coverage']);
 
 function parseArgs(argv) {
   const args = { project: null, src: null, check: false };
