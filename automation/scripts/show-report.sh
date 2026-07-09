@@ -34,6 +34,9 @@ fi
 
 echo "[show-report] 📊 Project: $PROJECT_NAME | Run: $RUN_ID"
 echo "[show-report] 🌐 Mở trình duyệt: http://localhost:9323"
+echo "[show-report] ⚠️  LƯU Ý: report HTML này là ẢNH CHỤP LẦN CHẠY GỐC — KHÔNG cập nhật sau heal."
+echo "[show-report]     Case đã heal-pass vẫn hiện FAILED + video trước heal ở đây."
+echo "[show-report]     👉 Kết quả & video CHÍNH THỨC (đã merge heal): xem AI_REPORT.md trong run dir."
 echo ""
 
 cd "$AUTOMATION_DIR"

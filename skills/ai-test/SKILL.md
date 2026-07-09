@@ -73,6 +73,7 @@ Flags:
 - `--screens` — **bật cơ chế SCREENS.md** (knowledge map màn hình): tái dùng URL/selector/flow + data recipe đã lưu để viết test nhanh hơn, chính xác hơn, ít heal hơn. Lần đầu chưa có file → crawl 1 lần sinh ra. → **Đọc `skills/ai-test/steps/STEP-screens.md`**. Không có flag → bỏ qua, giữ hành vi cũ.
 - `--kg` — **bật Knowledge Graph** (index endpoint/route từ source bằng Tree-sitter): agent query `projects/<name>/knowledge/api.json` để biết method/path/`file:line` thay vì grep source → giảm token pha authoring. Chưa có file → build 1 lần (xem Bước 5). → **Đọc `skills/ai-test/steps/STEP-knowledge-graph.md`**. Không có flag → bỏ qua, giữ hành vi cũ.
 - `--kg-rebuild` — chỉ có tác dụng khi đi kèm `--kg`: **ép build lại** Knowledge Graph trước khi dùng (khi source app đã đổi). Không có flag này → AI CHỈ cảnh báo nếu graph cũ, KHÔNG tự rebuild (dev tự quyết).
+- `--note="<text>"` — ghi chú/hướng dẫn thêm cho lần chạy này. AI PHẢI đọc và lưu ý ở Bước 3b/4/5/6 (seed, plan, generate, verify). Dùng cho **bất kỳ hướng dẫn thêm nào tùy project** — ví dụ (không giới hạn): công cụ/URL phụ để verify (mail-catcher, DB admin, hay service khác — URL/port tùy project), account/role cần dùng, màn cần bỏ qua, thứ tự chạy, quirk môi trường, v.v. ⚠️ **Ranh giới (theo RULES):** note CHỈ hướng dẫn *cách tương tác/verify*, và: (a) KHÔNG đặt expected/threshold ghi đè spec (spec-first + Seed #0); (b) KHÔNG chứa password/token/key (#16); (c) KHÔNG dùng để skip/che TC đáng chạy — TC dính third-party vẫn theo #15 (BLOCKED); (d) truy cập URL phụ (mail/DB viewer…) qua **container/HTTP/dbQuery**, KHÔNG mở browser trên host (#5). Ghi chú **ổn định theo project** nên để trong `SCREENS.md` mục "Môi trường & công cụ" thay vì gõ lại mỗi lần.
 
 Input types:
 | Dạng | Nhận diện | Loader |
@@ -189,7 +190,7 @@ Nếu `<slug>.md` đã tồn tại → lần chạy lại, chỉ update nội du
 
 ## Bước 3b: Kiểm tra data thiếu → tự động xử lý
 
-> 📊 `bash scripts/update-status.sh 3 s3b "<name>" "Checking and seeding test data..." 0 normal`
+> ⚠️ **BẮT BUỘC — chạy NGAY đầu bước** (cập nhật dashboard, hay bị sót): `bash scripts/update-status.sh 3 s3b "<name>" "Checking and seeding test data..." 0 <mode>`
 
 → **Đọc `skills/ai-test/steps/STEP-3b-seed.md`** để biết quy trình đầy đủ.
 
@@ -201,7 +202,7 @@ Nếu `<slug>.md` đã tồn tại → lần chạy lại, chỉ update nội du
 
 ## Bước 4: Sinh test plan
 
-> 📊 `bash scripts/update-status.sh 4 s4 "<name>" "Generating test plan..." 0 normal`
+> ⚠️ **BẮT BUỘC — chạy NGAY đầu bước** (cập nhật dashboard, hay bị sót): `bash scripts/update-status.sh 4 s4 "<name>" "Generating test plan..." 0 <mode>`
 
 **Chọn cách plan theo input (tiết kiệm thời gian):**
 - **Sheet/spec đã có TC chi tiết** (steps + expected result từng row) → sheet CHÍNH LÀ plan. Map thẳng rows → plan format, KHÔNG gọi planner agent (agent browse app từng bước = chậm và thừa).
@@ -216,7 +217,7 @@ Auto mode → Bước 5. Interactive mode → hiển thị plan, chờ OK.
 
 ## Bước 5: Sinh test code
 
-> 📊 `bash scripts/update-status.sh 5 s5 "<name>" "Generating test code..." 0 normal`
+> ⚠️ **BẮT BUỘC — chạy NGAY đầu bước** (cập nhật dashboard, hay bị sót): `bash scripts/update-status.sh 5 s5 "<name>" "Generating test code..." 0 <mode>`
 
 **Chọn cách generate theo loại TC (tiết kiệm thời gian):**
 - **TC dạng API/HTTP/DB** (assert status code, response body, DB count — không thao tác UI phức tạp) → tự viết thẳng vào `projects/<name>/tests/<slug>.spec.ts`, KHÔNG cần generator agent chạy từng bước browser.

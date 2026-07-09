@@ -102,17 +102,18 @@ Nếu không đọc được log (hiếm) → ghi "không đo được" thay vì
 
 ---
 
-## 🎬 Video từng test case
+## 🎬 Video & ảnh từng test case
 
-| TC | Title | Video |
-|----|-------|-------|
-| ✅ TC-1 | <title> | `<UNC path>\artifacts\<exact-dir>\video.mp4` |
-| ❌ TC-2 | <title> | `<UNC path>\artifacts\<exact-dir>\video.mp4` |
-| ⚠️ TC-3 flaky | <title> | `<UNC path>\artifacts\<exact-dir>\video.mp4` |
-| ⛔ TC-17 BLOCKED | hCaptcha — bên thứ ba | — |
+| TC | Title | Ảnh (evidence) | Video |
+|----|-------|----------------|-------|
+| ✅ TC-1 | <title> | `<UNC path>\artifacts\<exact-dir>\evidence.png` | `<UNC path>\artifacts\<exact-dir>\video.mp4` |
+| ❌ TC-2 | <title> | `<UNC path>\artifacts\<exact-dir>\test-failed-1.png` | `<UNC path>\artifacts\<exact-dir>\video.mp4` |
+| ⚠️ TC-3 flaky | <title> | `<UNC path>\artifacts\<exact-dir>\evidence.png` | `<UNC path>\artifacts\<exact-dir>\video.mp4` |
+| ⛔ TC-17 BLOCKED | hCaptcha — bên thứ ba | — | — |
 ```
 (Dùng ✅/❌/⚠️/⛔ trong cột TC. KHÔNG có cột Status riêng. BLOCKED dùng ⛔)
-(Video path: backtick, KHÔNG dùng markdown link `[text](url)`)
+(Cột Ảnh: TC pass → `evidence.png`; TC fail → `test-failed-1.png`; lấy tên thư mục thật từ `ls` như video. Không có ảnh → `—`)
+(Video/ảnh path: backtick, KHÔNG dùng markdown link `[text](url)`)
 
 ```markdown
 ---
@@ -163,7 +164,8 @@ Nếu không đọc được log (hiếm) → ghi "không đo được" thay vì
 
 - **Phần văn bản mô tả viết bằng TIẾNG VIỆT** — summary, phân tích lỗi, root cause, hướng fix, ghi chú. KHÔNG viết bằng tiếng Anh.
 - **Giữ nguyên nhãn cố định**: `Run ID`, `Date`, `Mode`, `Total`, `Pass`, `Fail`, tên file, log, code.
-- **BẮT BUỘC đủ 4 section chính**: `## 📊 Kết quả tổng hợp`, `## 💰 Token tiêu thụ`, `## 📂 Đường dẫn`, `## 🎬 Video từng test case`. Thiếu bất kỳ cái nào = report KHÔNG hợp lệ → phải sinh lại.
+- **BẮT BUỘC đủ 4 section chính**: `## 📊 Kết quả tổng hợp`, `## 💰 Token tiêu thụ`, `## 📂 Đường dẫn`, `## 🎬 Video & ảnh từng test case` (bảng phải có cột **Ảnh** + **Video**). Thiếu bất kỳ cái nào = report KHÔNG hợp lệ → phải sinh lại.
+- **AI_REPORT.md là báo cáo CHÍNH THỨC** (đã merge heal — status + video/ảnh đúng). Playwright HTML report (`show-report.sh`, localhost:9323) chỉ là ảnh chụp lần chạy gốc, KHÔNG cập nhật sau heal → không dùng làm nguồn kết luận.
 - Path video phải là `.mp4` (đã convert ở Bước 6b). Tên thư mục lấy từ `ls`, không tự đặt.
 - Mỗi test case một dòng riêng trong bảng video.
 - Section headers phải có emoji: `## 📊`, `## 📂`, `## 🎬`, `## ❌`, `## ⚠️`, `## ⛔`.
@@ -175,9 +177,9 @@ Nếu không đọc được log (hiếm) → ghi "không đo được" thay vì
 📊 Total: N | ✅ Pass: x | ❌ Fail: y | 🔧 Healed: z
 💰 Token: <total> (billed)
 
-📝 Báo cáo: <path theo OS>
+📝 Báo cáo: <path theo OS>   ← nguồn CHÍNH THỨC (đã merge heal)
 🎬 Full session: <path theo OS>/full-session.mp4
 🎬 TC-1 <tên>: <path>/<exact-dir>/video.mp4
    (liệt kê từng test — KHÔNG dùng placeholder)
-📊 HTML: cd $APP_ROOT/automation && ./scripts/show-report.sh <name> <run-id>
+📊 HTML (chỉ tham khảo, là ảnh trước heal): cd $APP_ROOT/automation && ./scripts/show-report.sh <name> <run-id>
 ```

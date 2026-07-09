@@ -49,6 +49,16 @@ File: `projects/<name>/SCREENS.md` (1 file/project).
 - cách login: fill input[name="mailaddress"] + input[name="admin_password"] → submit
 - storageState: .auth/admin.json   # login 1 lần, tái dùng — KHÔNG login lại mỗi TC
 
+## Môi trường & công cụ (TÙY PROJECT — điền cái nào project này có, bỏ cái nào không)
+# ⚠️ KHÔNG cố định và KHÔNG giới hạn ở mail/DB: mỗi project khác nhau (khác port, khác công cụ,
+# có/không có). Liệt kê BẤT KỲ công cụ/URL/hướng dẫn phụ nào project này cần để tương tác/verify.
+# CHỈ ghi cách tương tác/verify — KHÔNG ghi giá trị kỳ vọng (expected lấy từ spec), KHÔNG ghi password/token.
+# AI truy cập các URL này qua container/HTTP/dbQuery, KHÔNG mở browser trên host (Rule #5).
+- <Tên công cụ/service>: <URL + dùng để làm gì>   # vd (không bắt buộc): mail-catcher, DB admin, queue viewer, log viewer...
+- Account test: <role → tài khoản; KHÔNG ghi password thật>
+- Quirk môi trường: <vd màn X dùng iframe / captcha bật ở local / rate-limit / thứ tự chạy — nếu có>
+- Hướng dẫn khác: <bất kỳ lưu ý nào đặc thù project>
+
 ## Màn hình
 ### <Tên màn> — <url path>
 - role cần: admin | user | guest
