@@ -6,6 +6,9 @@ playwright/.cache/
 .env.local
 projects/*/.env
 projects/*/.auth/
+projects/*/.run-state.json
+projects/*/.run-checklist.json
+projects/*/.run-checklist.md
 projects/*/test-results/
 projects/*/playwright-report/
 projects/*/knowledge/

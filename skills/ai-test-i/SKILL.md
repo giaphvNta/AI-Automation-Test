@@ -1,6 +1,6 @@
 ---
 name: ai-test-i
-description: "AI Automation Test (Interactive). Gõ /ai-test-i → AI hỏi input + project + cờ mode qua picker (AskUserQuestion), rồi chạy đúng pipeline 7 bước của ai-test."
+description: "AI Automation Test (Interactive). Gõ /ai-test-i → AI hỏi input + project + cờ mode qua picker (AskUserQuestion), rồi chạy đúng pipeline 4 pha của ai-test."
 argument-hint: "[không cần flag — thiếu gì sẽ hỏi qua picker]"
 ---
 
@@ -127,8 +127,8 @@ In ra chat 1 dòng xác nhận (KHÔNG chờ confirm, chạy luôn):
 
 ## Phần B — Thực thi pipeline ai-test
 
-1. **Đọc TOÀN BỘ** `$APP_ROOT/skills/ai-test/SKILL.md` trong **MỘT lần Read** (offset=1, limit=2000). Đọc thiếu = bỏ sót Bước 1b/3b/luật env → test SAI.
-2. Thực hiện **đúng quy trình 7 bước** trong file đó, coi chuỗi tham số đã ráp ở A3 là `$ARGUMENTS` đầu vào của `ai-test`.
+1. **Đọc TOÀN BỘ** `$APP_ROOT/skills/ai-test/SKILL.md` trong **MỘT lần Read** (offset=1, limit=2000). Đọc thiếu = bỏ sót Pha 1/Pha 2/luật env → test SAI.
+2. Thực hiện **đúng quy trình 4 pha** trong file đó, coi chuỗi tham số đã ráp ở A3 là `$ARGUMENTS` đầu vào của `ai-test`.
 3. Từ đây là **auto mode** — không hỏi giữa chừng (trừ trường hợp `ai-test` quy định phải confirm: đổi env thật, hoặc data bắt buộc phải thật không fake được; và `--interactive` nếu user đã chọn).
 
 > Toàn bộ output (report path, video, source-meta, Google Sheet/Doc write-back...) do `ai-test` xử lý. Skill này không in report riêng.

@@ -9,7 +9,7 @@ argument-hint: "<url|file|sheet|description> --project=<name> [--target=<url>] [
 Gọi skill `ai-test` theo instructions trong file {{APP_ROOT}}/skills/ai-test/SKILL.md với arguments: $ARGUMENTS
 
 ⚠️ BẮT BUỘC — đọc theo thứ tự sau trước khi làm bất cứ điều gì:
-1. Đọc **TOÀN BỘ** `{{APP_ROOT}}/skills/ai-test/SKILL.md` trong **MỘT lần Read** (offset=1, limit=2000 — file ~470 dòng).
+1. Đọc **TOÀN BỘ** `{{APP_ROOT}}/skills/ai-test/SKILL.md` trong **MỘT lần Read** (offset=1, limit=2000).
 2. Đọc `{{APP_ROOT}}/skills/ai-test/rules/RULES.md` (Bước 0 — 17 rules bắt buộc).
 3. Xuất self-check: `✅ RULES đã đọc | Nắm: #1 #2 #3 #4 #5 #6 #7 #8 #9 #10 #11 #12 #13 #14 #15 #16 #17`
 

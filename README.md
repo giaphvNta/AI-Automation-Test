@@ -188,7 +188,7 @@ Không muốn nhớ cú pháp flag? Gõ `/ai-test-i` — AI sẽ **hỏi qua pic
 3. **Tốc độ/hiển thị** — chọn **1**: Normal / `--fast` / `--live` (radio — `--fast` và `--live` loại trừ nhau).
 4. **Tối ưu** — tick nhiều/bỏ trống: `--screens`, `--kg`. (`--interactive`/`--rerun`/`--kg-rebuild` gõ trực tiếp nếu cần.)
 
-Sau khi đủ tham số, `/ai-test-i` chạy **đúng pipeline 7 bước của `/ai-test`** — mọi quy tắc (seed, heal, report, video) giống hệt. Bạn cũng có thể truyền sẵn một phần flag, AI chỉ hỏi phần còn thiếu:
+Sau khi đủ tham số, `/ai-test-i` chạy **đúng pipeline 4 pha nội bộ của `/ai-test`** — với DEV vẫn chỉ là một lệnh, mọi quy tắc (seed, heal, report, video) giống hệt. Bạn cũng có thể truyền sẵn một phần flag, AI chỉ hỏi phần còn thiếu:
 ```
 /ai-test-i --project=customer-a          # chỉ còn hỏi nguồn test + chế độ
 ```
@@ -299,7 +299,7 @@ automation/projects/<tên>/test-results/runs/<run-id>/AI_REPORT.md
 
 Mở từ Windows Explorer (copy vào address bar):
 ```
-\\wsl.localhost\Ubuntu\home\user\ai-automation-test\automation\projects\<tên>\test-results\runs\<run-id>\AI_REPORT.md
+\\wsl.localhost\<WSL_DISTRO_NAME>\<path-to-repo>\automation\projects\<tên>\test-results\runs\<run-id>\AI_REPORT.md
 ```
 
 ### Video từng test + video toàn session
@@ -313,7 +313,7 @@ Mở từ Windows Explorer (copy vào address bar):
 
 **Windows (WSL2)** — Copy path dạng UNC vào Windows Explorer hoặc VLC:
 ```
-\\wsl.localhost\Ubuntu\home\user\ai-automation-test\automation\projects\<tên>\test-results\runs\<run-id>\artifacts\full-session.mp4
+\\wsl.localhost\<WSL_DISTRO_NAME>\<path-to-repo>\automation\projects\<tên>\test-results\runs\<run-id>\artifacts\full-session.mp4
 ```
 
 **macOS** — Mở Terminal và chạy:
@@ -357,7 +357,7 @@ docker compose run --rm playwright \
 
 ## Dashboard real-time
 
-Theo dõi trực tiếp pipeline đang chạy đến bước nào — hữu ích khi demo hoặc chạy test dài.
+Theo dõi trực tiếp pipeline đang chạy đến pha/bước nào — hữu ích khi demo hoặc chạy test dài.
 
 ### Khởi động
 
@@ -377,14 +377,14 @@ http://localhost:8765/dashboard.html
 
 | Chế độ | Mô tả |
 |---|---|
-| **Demo** | Playback tự động 7 bước — dùng để thuyết trình. Có nút Play / Pause / Reset / Speed |
-| **Live** | Poll `.test-status.json` mỗi 1.5s — hiển thị bước đang chạy thực tế |
+| **Demo** | Playback minh họa pipeline 4 pha — dùng để thuyết trình. Có nút Play / Pause / Reset / Speed |
+| **Live** | Poll `.test-status.json` mỗi 1.5s — hiển thị pha đang chạy thực tế |
 
 Chuyển chế độ bằng nút **Demo / Live** góc trên phải.
 
 ### Hoạt động như thế nào (Live mode)
 
-Mỗi khi AI chạy 1 bước trong pipeline, nó ghi trạng thái vào file `.test-status.json`. Dashboard poll file này liên tục và cập nhật UI. File được ghi tự động — không cần cấu hình thêm.
+Mỗi khi AI chạy 1 pha trong pipeline, nó ghi trạng thái vào file `.test-status.json`. Dashboard poll file này liên tục và cập nhật UI. File được ghi tự động — không cần cấu hình thêm.
 
 ---
 
@@ -444,8 +444,15 @@ phiên Claude Code thật:
 cd automation
 npm run kg:tokens -- --latest      # đo phiên mới nhất
 npm run kg:tokens -- --list        # liệt kê phiên
+npm run session:fresh              # cảnh báo nếu phiên hiện tại đã quá dài
 ```
 `TỔNG (billed)` = input + output + cache. AI_REPORT.md cũng tự log mục 💰 token (snapshot lúc report).
+
+Claude Code không xóa riêng phần `cache_read` giữa một phiên chat: mỗi lượt sau có thể đọc lại toàn bộ
+tiền tố đã cache. Vì vậy mỗi lần `/ai-test` nên chạy trong một phiên riêng, hoặc `/clear` trước khi bắt
+đầu rồi resume bằng `projects/<project>/.run-checklist.md` + `.run-state.json`, đặc biệt nếu dự kiến có
+nhiều vòng authoring/heal. Pha PREP tự chạy `check-session-freshness.mjs` theo kiểu advisory: phiên quá
+dài chỉ cảnh báo và ghi `session_freshness` vào state/report, không bao giờ chặn pipeline.
 
 **Số chuẩn để so A/B**: Stop hook `.claude/hooks/token-stop-hook.sh` tự ghi `<run-dir>/token.json`
 khi phiên kết thúc — đủ cả phần đuôi run + sub-agent, không phụ thuộc agent nhớ đo. Lấy `total_billed`
@@ -719,8 +726,8 @@ Mỗi run thêm 1 section mới vào cuối Doc:
 Test Run: 2026-06-05 09:15:30
 Project: customer-a  |  Run ID: 05_06_2026_09_15_30_412
 Status: ✅ PASS  |  Total: 8  |  Pass: 8  |  Fail: 0  |  Skip: 0  |  Healed: 2  |  Duration: 143s
-Report : \\wsl.localhost\Ubuntu\home\user\...\AI_REPORT.md
-Video  : \\wsl.localhost\Ubuntu\home\user\...\artifacts\full-session.mp4
+Report : \\wsl.localhost\<WSL_DISTRO_NAME>\...\AI_REPORT.md
+Video  : \\wsl.localhost\<WSL_DISTRO_NAME>\...\artifacts\full-session.mp4
 Notes  : Regression run sau deploy
 ```
 

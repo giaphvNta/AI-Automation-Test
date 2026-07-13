@@ -1,60 +1,40 @@
-# Bước 7 — Chi tiết: Tổng hợp report (Normal mode)
+# Pha 4 FINALIZE — Chi tiết: Tổng hợp report (Normal mode)
 
 > ⚠️ **BẮT BUỘC — KHÔNG SKIP.** Context dài, token nhiều, heal exhausted đều KHÔNG phải lý do skip. Luôn sinh AI_REPORT.md và lưu source-meta.
+> Trong pipeline 4 pha, mặc định gọi `node scripts/pipeline/finalize-run.mjs ...`; file này chỉ là chi tiết format/fallback khi cần sửa report thủ công.
 
 > ⚠️ **CẬP NHẬT DASHBOARD (BẮT BUỘC — hay bị sót):**
-> - Ngay khi vào bước report: `bash scripts/update-status.sh 7 s7 "<name>" "Generating report..." 0 <mode>`
-> - Sau khi xong HẾT (report + 7c + 7d + 7e): `bash scripts/update-status.sh 7 s7 "<name>" "Done" 0 <mode> done`
+> - Ngay khi vào finalize: `bash scripts/update-status.sh 4 finalize "<name>" "Finalizing report..." 0 <mode>`
+> - Sau khi xong HẾT: `bash scripts/update-status.sh 4 finalize "<name>" "Done" 0 <mode> done`
 > Thiếu lệnh `done` cuối → dashboard kẹt ở "Converting videos..." dù đã chạy xong. `<mode>` = `live` nếu `--live`, else `normal`.
+> `finalize-run.mjs` tự mark checklist run-level và reset project-level về `idle`; lệnh `update-status.sh ... done` cuối chỉ đóng trạng thái dashboard, không ghi đè checklist idle.
 
-## Bước 7a: Detect OS → chọn format path
+## Sinh khung report bằng SCRIPT (KHÔNG tự ráp bằng tay)
+
+> ⚠️ **BẮT BUỘC dùng script này thay vì tự viết 📊/💰/📂/🎬 bằng tay.** Script đọc trực tiếp
+> `results.json` (path ảnh/video THẬT — không đoán tên thư mục) + đo token — 0 token AI cho phần này.
+> AI chỉ cần viết phần phân tích lỗi (7b tiếp theo).
 
 ```bash
-if grep -qi microsoft /proc/version 2>/dev/null; then
-  OS_TYPE="wsl2"
-elif [[ "$(uname)" == "Darwin" ]]; then
-  OS_TYPE="macos"
-else
-  OS_TYPE="linux"
-fi
+cd $APP_ROOT/automation
+node scripts/report/gen-report.mjs <name> <run-id> --mode=<normal|live> --from="$RUN_STARTED_AT" > /tmp/report-skeleton.md
 ```
+`RUN_STARTED_AT` lấy ở Pha 3 ngay trước `run-test.sh`. Nếu chạy report thủ công mà không có biến này,
+có thể bỏ `--from`, nhưng token có thể bị lẫn toàn bộ phiên Claude hiện tại.
+Script tự đọc `<run-dir>/.run-state.json` (do `merge-heal.mjs` ghi) để biết TC nào đã heal — KHÔNG
+cần AI tự nhớ/truyền `--healed-tc`. Không có heal loop (chạy tay ngoài pipeline) mới cần flag đó.
+Script tự detect OS (wsl2/macos/linux) cho path.
 
-| Môi trường | Detect | Format path trong report |
-|---|---|---|
-| WSL2 (Windows) | `/proc/version` chứa "microsoft" | `\\wsl.localhost\Ubuntu\home\user\...\video.mp4` |
-| macOS | `uname` = `Darwin` | `file:///Users/<user>/.../video.mp4` |
-| Linux thuần | còn lại | `file:///home/user/.../video.mp4` |
-
-- **WSL2**: thay `/` → `\`, thêm prefix `\\wsl.localhost\Ubuntu`
-- **macOS/Linux**: dùng `file://` URI
-
-## Bước 7b: Sinh AI_REPORT.md
-
-> ⚠️ **Path bắt buộc:**
-> `$APP_ROOT/automation/projects/<name>/test-results/runs/<run-id>/AI_REPORT.md`
-> Run ID lấy từ output run-test.sh, KHÔNG tự đặt.
-
-**Chạy trước khi viết** để xác nhận path đúng:
+**Xác nhận path đúng trước khi dùng kết quả:**
 ```bash
-RUN_DIR="projects/<name>/test-results/runs/<run-id>"
-ls "$RUN_DIR/results.json" && echo "✅ Path OK" || echo "❌ SAI PATH — dừng lại"
+ls "projects/<name>/test-results/runs/<run-id>/results.json" && echo "✅ Path OK" || echo "❌ SAI PATH — dừng lại"
 ```
 
-**Lấy tên thư mục artifacts thật:**
-```bash
-ls projects/<name>/test-results/runs/<run-id>/artifacts/
-```
+Ghi `/tmp/report-skeleton.md` vào đầu `AI_REPORT.md` (thêm header Run ID/Date/Mode/Spec ở trên), rồi **APPEND** các section phân tích lỗi/flaky/blocked ở dưới (xem template đầy đủ bên dưới để biết cấu trúc các section này).
 
-**Lấy số token tiêu thụ (điền vào section 💰):**
-```bash
-# Đo token phiên hiện tại (cả lần chạy test). Nếu phiên dùng chung nhiều việc,
-# thêm --from "<ISO lúc bắt đầu run>" để bó đúng 1 run.
-npm run kg:tokens -- --latest
-```
-Lấy các dòng `input/output/cache_creation/cache_read/TỔNG (billed)` điền vào bảng 💰.
-Nếu không đọc được log (hiếm) → ghi "không đo được" thay vì bỏ trống section.
+> Script lỗi/không chạy được (hiếm) → fallback thủ công: xem README cũ trong git history của file này, hoặc tự ráp theo template dưới — nhưng ưu tiên sửa script hơn là bỏ qua nó.
 
-### Template AI_REPORT.md — PHẢI theo đúng format này
+### Template AI_REPORT.md — PHẢI theo đúng format này (📊/💰/📂/🎬 do script sinh, còn lại AI viết)
 
 ```markdown
 # AI Test Report — <project-name>

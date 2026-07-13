@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 
 # Tạo status file nếu chưa có — KHÔNG xóa nếu đã có (tránh mất data đang chạy)
 if [ ! -f .test-status.json ]; then
-  echo '{"step":-1,"status":"idle","project":"","message":"Waiting...","timestamp":""}' \
+  echo '{"step":-1,"step_key":"prep","status":"idle","project":"","message":"Waiting...","timestamp":""}' \
     > .test-status.json
 fi
 

@@ -1,4 +1,6 @@
 {
+  "advisorModel": "fable",
+  "effortLevel": "high",
   "hooks": {
     "UserPromptSubmit": [
       {
