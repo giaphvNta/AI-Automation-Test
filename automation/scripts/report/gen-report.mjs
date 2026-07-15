@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Sinh KHUNG AI_REPORT.md từ results.json + token (deterministic, 0 token AI).
-// AI chỉ cần APPEND phần "## ❌ TC-X Phân tích lỗi" cho case fail/BLOCKED — phần còn lại
+// AI chỉ cần APPEND phần "## ❌ T-X Phân tích lỗi" cho case fail/BLOCKED — phần còn lại
 // (📊/💰/📂/🎬 + bảng ảnh+video) script tự ráp từ attachments path thật trong results.json,
 // không đoán tên thư mục.
 //
 // Usage:
-//   node scripts/report/gen-report.mjs <project> <run-id> [--healed-tc="TC-1,TC-2"] [--mode=normal|live] [--os=auto|wsl2|macos|linux] [--from=<ISO>] [--to=<ISO>]
+//   node scripts/report/gen-report.mjs <project> <run-id> [--healed-tc="T-1,T-2"] [--mode=normal|live] [--os=auto|wsl2|macos|linux] [--from=<ISO>] [--to=<ISO>]
 //
 // Output: in ra stdout phần Markdown (📊+💰+📂+🎬). Caller (SKILL) ghi vào AI_REPORT.md rồi
 // append phần phân tích lỗi/flaky/blocked ở dưới.
@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const AUTOMATION_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const TEST_ID_RE = /^T(?:C)?-[A-Z0-9-]*\d+[a-z]?/i;
 
 function parseArgs(argv) {
   const a = { project: null, runId: null, healedTc: [], mode: 'normal', os: 'auto', from: null, to: null };
@@ -61,8 +62,12 @@ function toDisplayPath(containerPath, os) {
 }
 
 function tcNumberOf(title) {
-  const m = title.match(/^TC-?(\d+)/i);
+  const m = title.match(TEST_ID_RE)?.[0]?.match(/(\d+)[a-z]?$/i);
   return m ? parseInt(m[1], 10) : 9999;
+}
+
+function canonicalTestId(id) {
+  return (id || '').replace(/^T(?:C)-/i, 'T-');
 }
 
 function attachmentPath(attachments, name) {
@@ -188,10 +193,10 @@ export async function generateReport({ project, runId, healedTc = [], mode = 'no
       sessionFreshness ||= runState.session_freshness || null;
     } catch {}
   }
-  const healedSet = new Set([...healedTc, ...healedFromState].map((s) => s.replace(/:$/, '')));
+  const healedSet = new Set([...healedTc, ...healedFromState].map((s) => canonicalTestId(s.replace(/:$/, ''))));
 
   const stats = computeStats(tests);
-  const healedCount = tests.filter((t) => t.status === 'passed' && healedSet.has(t.title.match(/^TC-?\d+[a-z]?/i)?.[0])).length;
+  const healedCount = tests.filter((t) => t.status === 'passed' && healedSet.has(canonicalTestId(t.title.match(TEST_ID_RE)?.[0]))).length;
 
   let token = null;
   let tokenSource = 'none';
@@ -233,9 +238,9 @@ export async function generateReport({ project, runId, healedTc = [], mode = 'no
   if (tokenSource === 'filtered') {
     lines.push('', `> Đo bằng \`measure-tokens.mjs --latest\` có lọc thời gian${from ? ` từ \`${from}\`` : ''}${to ? ` đến \`${to}\`` : ''}.`, '', '---', '');
   } else if (tokenSource === 'run-token') {
-    lines.push('', '> Số token lấy từ `token.json` trong run dir. File này là nguồn chuẩn khi mỗi lần test chạy trong một phiên Claude riêng; nếu dùng chung phiên dài, hãy sinh report với `--from=<ISO lúc bắt đầu run>` để bó đúng lần chạy.', '', '---', '');
+    lines.push('', '> Số token lấy từ `token.json` trong run dir. File này là nguồn chuẩn khi mỗi lần test chạy trong một phiên AI tool riêng; nếu dùng chung phiên dài, hãy sinh report với `--from=<ISO lúc bắt đầu run>` để bó đúng lần chạy.', '', '---', '');
   } else if (tokenSource === 'filtered-missing') {
-    lines.push('', '> Không đọc được log Claude để lọc theo thời gian. Không fallback sang `token.json` vì file đó có thể chứa cả phiên dài, không đúng riêng run này.', '', '---', '');
+    lines.push('', '> Không đọc được log AI tool để lọc theo thời gian. Không fallback sang `token.json` vì file đó có thể chứa cả phiên dài, không đúng riêng run này.', '', '---', '');
   } else {
     lines.push('', '> Chưa có `token.json` của run, nên số token là snapshot từ `measure-tokens.mjs --latest`. Chạy 1 phiên/run để snapshot này không lẫn việc khác; sau khi Stop hook ghi `token.json`, dùng file đó làm nguồn chuẩn.', '', '---', '');
   }
@@ -248,10 +253,10 @@ export async function generateReport({ project, runId, healedTc = [], mode = 'no
   lines.push('```', '', '---', '');
 
   lines.push('## 🎬 Video & ảnh từng test case', '');
-  lines.push('| TC | Title | Ảnh (evidence) | Video |', '|----|-------|----------------|-------|');
+  lines.push('| T | Title | Ảnh (evidence) | Video |', '|---|-------|----------------|-------|');
   for (const t of tests) {
-    const m = t.title.match(/^(TC-?\d+[a-z]?):?\s*(.*)$/i);
-    const tcId = m ? m[1] : t.title;
+    const m = t.title.match(/^(T(?:C)?-[A-Z0-9-]*\d+[a-z]?):?\s*(.*)$/i);
+    const tcId = m ? canonicalTestId(m[1]) : t.title;
     const titleRest = m ? m[2] : '';
     const isHealed = t.status === 'passed' && healedSet.has(tcId);
     const emoji = statusEmoji(t.status, isHealed);
@@ -270,7 +275,7 @@ export async function generateReport({ project, runId, healedTc = [], mode = 'no
 async function main() {
   const { project, runId, healedTc, mode, os: osArg, from, to } = parseArgs(process.argv.slice(2));
   if (!project || !runId) {
-    console.error('Usage: gen-report.mjs <project> <run-id> [--healed-tc="TC-1,TC-2"] [--mode=normal|live] [--os=auto|wsl2|macos|linux] [--from=<ISO>] [--to=<ISO>]');
+    console.error('Usage: gen-report.mjs <project> <run-id> [--healed-tc="T-1,T-2"] [--mode=normal|live] [--os=auto|wsl2|macos|linux] [--from=<ISO>] [--to=<ISO>]');
     process.exit(1);
   }
   console.log(await generateReport({ project, runId, healedTc, mode, os: osArg, from, to }));

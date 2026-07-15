@@ -30,7 +30,10 @@ PROJECTS      = $APP_ROOT/automation/projects
 
 ---
 
-## Phần A — Thu thập tham số (qua AskUserQuestion)
+## Phần A — Thu thập tham số
+
+Ưu tiên dùng picker/AskUserQuestion nếu AI tool hiện tại hỗ trợ. Nếu chạy trên Codex hoặc môi trường
+không có picker, hỏi cùng nội dung bằng chat thường, gom câu trả lời rồi ráp tham số giống hệt A3.
 
 ### A0. Parse `$ARGUMENTS` đã có
 
@@ -50,9 +53,10 @@ ls -1t $APP_ROOT/automation/projects/ 2>/dev/null
 ```
 Lấy tối đa **4 project mới nhất** làm options cho câu hỏi project. Project khác / project mới → user bấm **"Other"** để nhập tên.
 
-### A2. Gọi AskUserQuestion — chỉ đưa các câu hỏi cho phần còn thiếu
+### A2. Gọi AskUserQuestion hoặc hỏi chat thường — chỉ đưa các câu hỏi cho phần còn thiếu
 
-Gộp tất cả câu hỏi cần thiết vào **một** lần gọi AskUserQuestion (tối đa 4 câu):
+Nếu có AskUserQuestion/picker, gộp tất cả câu hỏi cần thiết vào **một** lần gọi (tối đa 4 câu).
+Nếu không có picker, hỏi bằng chat thường theo cùng thứ tự và chỉ hỏi phần còn thiếu:
 
 - **Câu INPUT** (chỉ khi `MISSING_INPUT`):
   - question: `"Bạn muốn test gì? Bấm \"Other\" để dán thẳng URL / path / mô tả ngay bây giờ — nhanh nhất. Hoặc chọn loại nguồn rồi mình hỏi giá trị sau."`
@@ -120,7 +124,7 @@ Ghép theo thứ tự: `<input> --project=<name> <mode-flags> <sheet-flags> <pas
 
 In ra chat 1 dòng xác nhận (KHÔNG chờ confirm, chạy luôn):
 ```
-▶ Chạy: /ai-test <chuỗi-tham-số-đã-ráp>
+▶ Chạy pipeline ai-test với tham số: <chuỗi-tham-số-đã-ráp>
 ```
 
 ---

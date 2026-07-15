@@ -15,21 +15,27 @@ function dockerUp() {
   catch { return false; }
 }
 
-function main() {
+export function checkEnv() {
   const agentFiles = ['playwright-test-planner.md', 'playwright-test-generator.md', 'playwright-test-healer.md']
     .map((f) => join(AUTOMATION_DIR, '.claude', 'agents', f));
   const missingAgents = agentFiles.filter((f) => !existsSync(f)).map((f) => f.split('/').pop());
 
   const isDockerUp = dockerUp();
-  const result = {
+  return {
     docker_up: isDockerUp,
     agents_ok: missingAgents.length === 0,
     missing_agents: missingAgents,
     node_modules_ok: existsSync(join(AUTOMATION_DIR, 'node_modules')),
     ok: isDockerUp && missingAgents.length === 0 && existsSync(join(AUTOMATION_DIR, 'node_modules')),
   };
+}
+
+function main() {
+  const result = checkEnv();
   console.log(JSON.stringify(result, null, 2));
   if (!result.ok) process.exit(1);
 }
 
-main();
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}

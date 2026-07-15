@@ -7,6 +7,7 @@ set -euo pipefail
 
 APP_ROOT="$(cd "$(dirname "$0")" && pwd)"
 CLAUDE_COMMANDS_DIR="$HOME/.claude/commands"
+ROOT_MARKER="$HOME/.ai-automation-test-root"
 PW_IMAGE="mcr.microsoft.com/playwright:v1.60.0-noble"
 
 GREEN='\033[0;32m'
@@ -144,6 +145,14 @@ for cmd in ai-test ai-test-i; do
   ok "Slash command /$cmd đã đăng ký tại ~/.claude/commands/$cmd.md (APP_ROOT=$APP_ROOT)"
 done
 
+# ─── 4a. Ghi marker automation root cho Codex / tool khác ─────────────────────
+
+echo ""
+echo "► Bước 4a: Ghi automation root marker"
+
+printf '%s\n' "$APP_ROOT" > "$ROOT_MARKER"
+ok "Đã ghi $ROOT_MARKER (dùng cho Codex khi đang ở project khác)"
+
 # ─── 4b. Hook validate /ai-test (Validate & chặn) ─────────────────────────────
 
 echo ""
@@ -207,6 +216,12 @@ echo '     /ai-test "Test trang example.com — verify title" --project=demo --t
 echo ""
 echo "     # Hoặc chế độ tương tác — không cần nhớ flag, AI hỏi qua picker:"
 echo "     /ai-test-i"
+echo ""
+echo "     # Codex hoặc AI tool khác, kể cả khi đang mở project khác:"
+echo "     # Lưu ý: KHÔNG gõ /ai-test trong Codex; đó là slash command riêng của Claude Code."
+echo "     Chạy cat ~/.ai-automation-test-root để lấy APP_ROOT."
+echo "     Sau đó đọc <APP_ROOT>/skills/ai-test/SKILL.md và chạy pipeline cho:"
+echo '     "Test trang example.com — verify title" --project=demo --target=https://example.com'
 echo ""
 echo "  Thư mục test sẽ được tạo tự động tại:"
 echo "  $APP_ROOT/automation/projects/<tên-project>/"

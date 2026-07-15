@@ -72,7 +72,7 @@ async function main() {
 ## Data recipes (cách tạo/xóa data — theo thứ tự ưu tiên môi trường)
 ${dataRecipeSection(api)}
 ## Không chạy trên stg/prod (test phá hoại / phụ thuộc third-party thật)
-- <điền khi rà TC phá hoại>
+- <điền khi rà T phá hoại>
 `;
 
   await mkdir(projectDir, { recursive: true });

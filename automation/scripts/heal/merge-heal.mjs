@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Merge kết quả heal rerun về run gốc (Bước 6.5) — thay python heredoc inline trong SKILL.
 // Làm cả 3 việc: (a) copy artifacts, (b) merge results.json, (c) xóa heal dir.
-// Output: in ra danh sách TC id THẬT SỰ được heal (so status trước/sau — không phải suy đoán/AI tự nhớ),
+// Output: in ra danh sách T id THẬT SỰ được heal (so status trước/sau — không phải suy đoán/AI tự nhớ),
 // dùng trực tiếp cho `gen-report.mjs --healed-tc=`.
 //
 // Usage: node scripts/heal/merge-heal.mjs <project> <RUN_ID> <HEAL_RUN_ID>
@@ -12,6 +12,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const AUTOMATION_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const TEST_ID_RE = /^T(?:C)?-[A-Z0-9-]*\d+[a-z]?/i;
 
 function specStatusMap(suites, out = {}) {
   for (const s of suites || []) {
@@ -28,11 +29,37 @@ function setSpecPassed(suites, title) {
   for (const s of suites || []) {
     for (const spec of s.specs || []) {
       if (spec.title === title) {
-        for (const t of spec.tests || []) for (const r of t.results || []) r.status = 'passed';
+        for (const t of spec.tests || []) {
+          t.status = 'expected';
+          for (const r of t.results || []) r.status = 'passed';
+        }
       }
     }
     setSpecPassed(s.suites, title);
   }
+}
+
+function findSpec(suites, title) {
+  for (const s of suites || []) {
+    for (const spec of s.specs || []) {
+      if (spec.title === title) return spec;
+    }
+    const nested = findSpec(s.suites, title);
+    if (nested) return nested;
+  }
+  return null;
+}
+
+function rewriteRunIdPaths(value, fromRunId, toRunId) {
+  if (Array.isArray(value)) return value.map((item) => rewriteRunIdPaths(item, fromRunId, toRunId));
+  if (value && typeof value === 'object') {
+    for (const [key, child] of Object.entries(value)) {
+      value[key] = rewriteRunIdPaths(child, fromRunId, toRunId);
+    }
+    return value;
+  }
+  if (typeof value === 'string') return value.split(fromRunId).join(toRunId);
+  return value;
 }
 
 async function main() {
@@ -54,7 +81,7 @@ async function main() {
   const origStatusBefore = specStatusMap(orig.suites);
   const healStatus = specStatusMap(heal.suites);
 
-  // a. copy artifacts (đè — bản mới nhất thắng, kể cả TC heal lại vẫn fail)
+  // a. copy artifacts (đè — bản mới nhất thắng, kể cả T heal lại vẫn fail)
   const healArtifacts = join(healDir, 'artifacts');
   const origArtifacts = join(runDir, 'artifacts');
   if (existsSync(healArtifacts)) cpSync(healArtifacts, origArtifacts, { recursive: true });
@@ -63,10 +90,15 @@ async function main() {
   const healedTc = [];
   for (const [title, status] of Object.entries(healStatus)) {
     if (status === 'passed') {
+      const origSpec = findSpec(orig.suites, title);
+      const healSpec = findSpec(heal.suites, title);
+      if (origSpec && healSpec) {
+        origSpec.tests = rewriteRunIdPaths(JSON.parse(JSON.stringify(healSpec.tests || [])), healRunId, runId);
+      }
       setSpecPassed(orig.suites, title);
       if (origStatusBefore[title] === 'failed') {
-        const m = title.match(/^TC-\d+[a-z]?/);
-        if (m) healedTc.push(m[0]);
+        const m = title.match(TEST_ID_RE);
+        if (m) healedTc.push(m[0].replace(/^T(?:C)-/i, 'T-'));
       }
     }
   }

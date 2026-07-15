@@ -1,16 +1,13 @@
 #!/usr/bin/env node
-// Advisory check: phát hiện phiên Claude Code quá dài trước khi chạy /ai-test.
+// Advisory check: phát hiện phiên AI tool quá dài trước khi chạy /ai-test.
 // Không bao giờ block pipeline; lỗi đọc log hoặc fresh=false đều exit 0.
 //
 // Usage:
 //   node scripts/check-session-freshness.mjs [--threshold-tokens=3000000] [--threshold-messages=300] [--session=<file.jsonl>]
 //   --session: đo 1 phiên cụ thể thay vì luôn "mới nhất" (hữu ích khi debug/kiểm tra 1 phiên cũ).
 
-import { execFileSync } from 'node:child_process';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { listSessions, sumUsage, toTokenJson } from './measure-tokens.mjs';
 
-const AUTOMATION_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEFAULT_THRESHOLD_TOKENS = 3_000_000;
 const DEFAULT_THRESHOLD_MESSAGES = 300;
 
@@ -54,20 +51,29 @@ function freshOpen(args, reason = '') {
     session_duration_min: null,
     threshold_tokens: args.thresholdTokens,
     threshold_messages: args.thresholdMessages,
+    source: 'unavailable',
     advisory: true,
     reason,
   };
 }
 
-function checkFreshness(args) {
+async function measureSession(args) {
+  const target = args.session || '--latest';
+  let sessionPath = target;
+  if (target === '--latest') {
+    const sessions = await listSessions();
+    if (!sessions.length) throw new Error('Không tìm thấy phiên nào.');
+    sessionPath = sessions[0].path;
+  }
+  return toTokenJson(await sumUsage(sessionPath));
+}
+
+export async function checkFreshness(args = {}) {
+  args.thresholdTokens ||= DEFAULT_THRESHOLD_TOKENS;
+  args.thresholdMessages ||= DEFAULT_THRESHOLD_MESSAGES;
+  args.session ||= '';
   try {
-    const target = args.session || '--latest';
-    const out = execFileSync('node', [join(AUTOMATION_DIR, 'scripts/measure-tokens.mjs'), target, '--json'], {
-      cwd: AUTOMATION_DIR,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    const measured = JSON.parse(out);
+    const measured = await measureSession(args);
     const total = Number(measured.total_billed || 0);
     const messages = Number(measured.messages || 0);
     const fresh = total <= args.thresholdTokens && messages <= args.thresholdMessages;
@@ -78,10 +84,11 @@ function checkFreshness(args) {
       session_duration_min: durationMin(measured.first, measured.last),
       threshold_tokens: args.thresholdTokens,
       threshold_messages: args.thresholdMessages,
+      source: args.session ? 'session-file' : 'claude-code-latest',
     };
     if (!fresh) {
       console.error(
-        `⚠️ Phiên hiện tại đã tích lũy ${total.toLocaleString('en-US')} token / ${messages.toLocaleString('en-US')} message — cache_read sẽ phình to khi chạy authoring/heal trong phiên này. Khuyến nghị: /clear hoặc mở phiên mới rồi resume bằng .run-checklist.md + .run-state.json.`
+        `⚠️ Phiên AI hiện tại đã tích lũy ${total.toLocaleString('en-US')} token / ${messages.toLocaleString('en-US')} message — cache_read sẽ phình to khi chạy authoring/heal trong phiên này. Khuyến nghị: clear context hoặc mở phiên mới rồi resume bằng .run-checklist.md + .run-state.json.`
       );
     }
     return result;
@@ -92,8 +99,13 @@ function checkFreshness(args) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  const result = checkFreshness(args);
-  console.log(JSON.stringify(result, null, 2));
+  checkFreshness(args)
+    .then((result) => console.log(JSON.stringify(result, null, 2)))
+    .catch((e) => {
+      console.log(JSON.stringify(freshOpen(args, e?.message || 'check-session-freshness failed'), null, 2));
+    });
 }
 
-main();
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}

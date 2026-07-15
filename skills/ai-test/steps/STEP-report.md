@@ -20,8 +20,8 @@ cd $APP_ROOT/automation
 node scripts/report/gen-report.mjs <name> <run-id> --mode=<normal|live> --from="$RUN_STARTED_AT" > /tmp/report-skeleton.md
 ```
 `RUN_STARTED_AT` lấy ở Pha 3 ngay trước `run-test.sh`. Nếu chạy report thủ công mà không có biến này,
-có thể bỏ `--from`, nhưng token có thể bị lẫn toàn bộ phiên Claude hiện tại.
-Script tự đọc `<run-dir>/.run-state.json` (do `merge-heal.mjs` ghi) để biết TC nào đã heal — KHÔNG
+có thể bỏ `--from`, nhưng token có thể bị lẫn toàn bộ phiên AI tool hiện tại.
+Script tự đọc `<run-dir>/.run-state.json` (do `merge-heal.mjs` ghi) để biết T nào đã heal — KHÔNG
 cần AI tự nhớ/truyền `--healed-tc`. Không có heal loop (chạy tay ngoài pipeline) mới cần flag đó.
 Script tự detect OS (wsl2/macos/linux) cho path.
 
@@ -68,8 +68,8 @@ Ghi `/tmp/report-skeleton.md` vào đầu `AI_REPORT.md` (thêm header Run ID/Da
 | cache_read | <cr> |
 | **TỔNG (billed)** | **<total>** |
 
-> **Mặc định luôn đo** mỗi lần chạy (không phải cờ, không opt-in) bằng `npm run kg:tokens` (đọc log phiên Claude Code). Nếu chạy `--kg` thì ghi chú thêm để so A/B.
-> **Số cuối cùng chính xác** do **Stop hook** (`.claude/hooks/token-stop-hook.sh`) tự ghi vào `<run-dir>/token.json` khi phiên kết thúc — deterministic, đủ cả phần đuôi run + sub-agent. Con số 💰 trong report này là snapshot lúc viết report (có thể thiếu phần sau report) → **dùng `token.json` làm nguồn chuẩn khi so A/B.**
+> **Mặc định luôn đo** mỗi lần chạy (không phải cờ, không opt-in) bằng `npm run kg:tokens` khi có log tương thích. Backend hiện tại đọc log Claude Code; trên Codex hoặc tool chưa có log tương thích thì freshness/token snapshot fail-open, không chặn report.
+> **Số cuối cùng chính xác trên Claude Code** do **Stop hook** (`.claude/hooks/token-stop-hook.sh`) tự ghi vào `<run-dir>/token.json` khi phiên kết thúc — deterministic, đủ cả phần đuôi run + sub-agent. Con số 💰 trong report này là snapshot lúc viết report (có thể thiếu phần sau report) → **dùng `token.json` làm nguồn chuẩn khi so A/B nếu file này tồn tại.**
 
 ---
 
@@ -84,22 +84,22 @@ Ghi `/tmp/report-skeleton.md` vào đầu `AI_REPORT.md` (thêm header Run ID/Da
 
 ## 🎬 Video & ảnh từng test case
 
-| TC | Title | Ảnh (evidence) | Video |
+| T | Title | Ảnh (evidence) | Video |
 |----|-------|----------------|-------|
-| ✅ TC-1 | <title> | `<UNC path>\artifacts\<exact-dir>\evidence.png` | `<UNC path>\artifacts\<exact-dir>\video.mp4` |
-| ❌ TC-2 | <title> | `<UNC path>\artifacts\<exact-dir>\test-failed-1.png` | `<UNC path>\artifacts\<exact-dir>\video.mp4` |
-| ⚠️ TC-3 flaky | <title> | `<UNC path>\artifacts\<exact-dir>\evidence.png` | `<UNC path>\artifacts\<exact-dir>\video.mp4` |
-| ⛔ TC-17 BLOCKED | hCaptcha — bên thứ ba | — | — |
+| ✅ T-1 | <title> | `<UNC path>\artifacts\<exact-dir>\evidence.png` | `<UNC path>\artifacts\<exact-dir>\video.mp4` |
+| ❌ T-2 | <title> | `<UNC path>\artifacts\<exact-dir>\test-failed-1.png` | `<UNC path>\artifacts\<exact-dir>\video.mp4` |
+| ⚠️ T-3 flaky | <title> | `<UNC path>\artifacts\<exact-dir>\evidence.png` | `<UNC path>\artifacts\<exact-dir>\video.mp4` |
+| ⛔ T-17 BLOCKED | hCaptcha — bên thứ ba | — | — |
 ```
-(Dùng ✅/❌/⚠️/⛔ trong cột TC. KHÔNG có cột Status riêng. BLOCKED dùng ⛔)
-(Cột Ảnh: TC pass → `evidence.png`; TC fail → `test-failed-1.png`; lấy tên thư mục thật từ `ls` như video. Không có ảnh → `—`)
+(Dùng ✅/❌/⚠️/⛔ trong cột T. KHÔNG có cột Status riêng. BLOCKED dùng ⛔)
+(Cột Ảnh: T pass → `evidence.png`; T fail → `test-failed-1.png`; lấy tên thư mục thật từ `ls` như video. Không có ảnh → `—`)
 (Video/ảnh path: backtick, KHÔNG dùng markdown link `[text](url)`)
 
 ```markdown
 ---
 
-## ❌ TC-X: <tên test> — Phân tích lỗi
-(BẮT BUỘC cho từng TC fail)
+## ❌ T-X: <tên test> — Phân tích lỗi
+(BẮT BUỘC cho từng T fail)
 
 **Lỗi:**
 ```
@@ -120,20 +120,20 @@ Ghi `/tmp/report-skeleton.md` vào đầu `AI_REPORT.md` (thêm header Run ID/Da
 ---
 
 ## ⚠️ Flaky Tests
-(Chỉ có nếu có TC flaky)
+(Chỉ có nếu có T flaky)
 
-| TC | Title | Ghi chú |
+| T | Title | Ghi chú |
 |----|-------|---------|
-| TC-X | <title> | Passed sau retry #N. <lý do> |
+| T-X | <title> | Passed sau retry #N. <lý do> |
 
 ---
 
 ## ⛔ Blocked Tests
-(Chỉ có nếu có TC bị block bởi third-party)
+(Chỉ có nếu có T bị block bởi third-party)
 
-| TC | Lý do | Giải pháp tiếp theo |
+| T | Lý do | Giải pháp tiếp theo |
 |----|-------|---------------------|
-| TC-17 | hCaptcha bên thứ ba — không thể tự động | Cung cấp test key hoặc mock |
+| T-17 | hCaptcha bên thứ ba — không thể tự động | Cung cấp test key hoặc mock |
 
 ---
 
@@ -159,7 +159,7 @@ Ghi `/tmp/report-skeleton.md` vào đầu `AI_REPORT.md` (thêm header Run ID/Da
 
 📝 Báo cáo: <path theo OS>   ← nguồn CHÍNH THỨC (đã merge heal)
 🎬 Full session: <path theo OS>/full-session.mp4
-🎬 TC-1 <tên>: <path>/<exact-dir>/video.mp4
+🎬 T-1 <tên>: <path>/<exact-dir>/video.mp4
    (liệt kê từng test — KHÔNG dùng placeholder)
 📊 HTML (chỉ tham khảo, là ảnh trước heal): cd $APP_ROOT/automation && ./scripts/show-report.sh <name> <run-id>
 ```

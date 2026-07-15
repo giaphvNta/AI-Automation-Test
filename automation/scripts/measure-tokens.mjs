@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Đo token THẬT tiêu thụ trong 1 phiên Claude Code, đọc từ log JSONL của phiên.
+// Đo token THẬT tiêu thụ trong 1 phiên AI tool.
+// Hiện backend đọc log JSONL của Claude Code tại ~/.claude/projects; tool khác như Codex sẽ fail-open
+// ở check-session-freshness nếu không có log tương thích.
 // Dùng làm bằng chứng A/B: chạy /ai-test 1 lần KHÔNG --kg và 1 lần CÓ --kg (mỗi lần 1 phiên
 // riêng cho sạch), rồi so tổng token.
 //
@@ -16,7 +18,7 @@ import { homedir } from 'node:os';
 
 const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
 
-async function listSessions() {
+export async function listSessions() {
   const out = [];
   let dirs = [];
   try { dirs = await readdir(PROJECTS_DIR); } catch { return out; }
@@ -34,7 +36,7 @@ async function listSessions() {
   return out.sort((a, b) => b.mtime - a.mtime);
 }
 
-async function sumUsage(jsonlPath, from, to) {
+export async function sumUsage(jsonlPath, from, to) {
   const text = await readFile(jsonlPath, 'utf8');
   const acc = { input: 0, output: 0, cache_creation: 0, cache_read: 0, messages: 0, byModel: {},
                 first: null, last: null };
@@ -92,6 +94,22 @@ function printReport(path, a) {
   }
 }
 
+export function toTokenJson(a) {
+  const total = a.input + a.output + a.cache_creation + a.cache_read;
+  return {
+    input: a.input,
+    output: a.output,
+    cache_creation: a.cache_creation,
+    cache_read: a.cache_read,
+    total_billed: total,
+    messages: a.messages,
+    first: a.first ? new Date(a.first).toISOString() : null,
+    last: a.last ? new Date(a.last).toISOString() : null,
+    by_model: a.byModel,
+    measured_at: new Date().toISOString(),
+  };
+}
+
 function getOpt(name) {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : null;
@@ -120,17 +138,12 @@ async function main() {
   }
   const a = await sumUsage(path, from, to);
   if (process.argv.includes('--json')) {
-    const total = a.input + a.output + a.cache_creation + a.cache_read;
-    console.log(JSON.stringify({
-      input: a.input, output: a.output, cache_creation: a.cache_creation,
-      cache_read: a.cache_read, total_billed: total, messages: a.messages,
-      first: a.first ? new Date(a.first).toISOString() : null,
-      last: a.last ? new Date(a.last).toISOString() : null,
-      by_model: a.byModel, measured_at: new Date().toISOString(),
-    }, null, 2));
+    console.log(JSON.stringify(toTokenJson(a), null, 2));
     return;
   }
   printReport(path, a);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}

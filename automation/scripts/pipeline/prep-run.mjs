@@ -8,11 +8,13 @@
 // Output: JSON state; đồng thời ghi projects/<name>/.run-state.json
 
 import { createHash } from 'node:crypto';
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { checkEnv } from '../check-env.mjs';
+import { checkFreshness } from '../check-session-freshness.mjs';
 
 const AUTOMATION_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -81,15 +83,9 @@ function docId(input) {
   return m ? m[1] : input;
 }
 
-function confluencePageId(input) {
-  const m = input.match(/\/pages\/(\d+)/) || input.match(/[?&]pageId=(\d+)/);
-  return m ? m[1] : slugify(input);
-}
-
 function inputKind(input) {
   if (/docs\.google\.com\/spreadsheets/.test(input)) return 'google_sheet';
   if (/docs\.google\.com\/document/.test(input)) return 'google_doc';
-  if (/\.atlassian\.net\/wiki/.test(input)) return 'confluence';
   if (/^https?:\/\//.test(input)) return 'url';
   if (/[\\/]/.test(input) || /\.(md|txt|csv|xlsx|pdf)$/i.test(input)) return 'file';
   return 'description';
@@ -101,7 +97,6 @@ function inputSlug(args, kind) {
     return `sheet_${sheetId(args.input).slice(0, 8)}${tab}`;
   }
   if (kind === 'google_doc') return `doc_${docId(args.input).slice(0, 8)}`;
-  if (kind === 'confluence') return `confluence_${confluencePageId(args.input)}`;
   if (kind === 'file') return slugify(basename(args.input, extname(args.input)));
   if (kind === 'url') {
     try {
@@ -144,43 +139,16 @@ function runOptionalNode(script, args) {
   }
 }
 
-function runJsonScript(script, fallback, options = {}) {
-  return new Promise((resolve) => {
-    const child = spawn('node', [join(AUTOMATION_DIR, script)], {
-      cwd: AUTOMATION_DIR,
-      stdio: ['ignore', 'pipe', options.inheritStderr ? 'inherit' : 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (chunk) => { stdout += chunk; });
-    if (!options.inheritStderr) child.stderr.on('data', (chunk) => { stderr += chunk; });
-    child.on('error', () => resolve(fallback));
-    child.on('close', () => {
-      try {
-        resolve(JSON.parse(stdout || '{}'));
-      } catch {
-        resolve({ ...fallback, error: stderr || stdout || fallback.error });
-      }
-    });
-  });
-}
-
 function runCheckEnv() {
-  return runJsonScript('scripts/check-env.mjs', { ok: false, error: 'check-env failed' });
+  try {
+    return checkEnv();
+  } catch (e) {
+    return { ok: false, error: e?.message || 'check-env failed' };
+  }
 }
 
 function runSessionFreshness() {
-  const fallback = {
-    fresh: true,
-    total_billed: 0,
-    messages: 0,
-    session_duration_min: null,
-    threshold_tokens: 3_000_000,
-    threshold_messages: 300,
-    advisory: true,
-    reason: 'check-session-freshness failed',
-  };
-  return runJsonScript('scripts/check-session-freshness.mjs', fallback, { inheritStderr: true });
+  return checkFreshness();
 }
 
 async function loadSpec(args, kind, specFile) {
@@ -199,12 +167,6 @@ async function loadSpec(args, kind, specFile) {
 
   if (kind === 'google_doc') {
     const content = runNode('scripts/load-google-doc.mjs', [args.input]);
-    await writeFile(specFile, content);
-    return content;
-  }
-
-  if (kind === 'confluence') {
-    const content = runNode('scripts/load-confluence.mjs', [args.input]);
     await writeFile(specFile, content);
     return content;
   }

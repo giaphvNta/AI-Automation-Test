@@ -40,11 +40,11 @@ node scripts/write-results-to-sheet.mjs \
 | `Safari`, `WebKit` | Kết quả trên WebKit (nếu có) |
 | `Firefox` | Kết quả trên Firefox (nếu có) |
 | `Status`, `Kết quả`, `結果2`, `結果1` | Kết quả tổng hợp |
-| `Tester`, `Tested by`, `QA` | `Claude AI` |
+| `Tester`, `Tested by`, `QA` | `AI Automation` |
 | `Test date`, `Date`, `Ngày` | Ngày giờ chạy |
 | `Notes`, `Error`, `Ghi chú` | Error message nếu fail |
 
-Match test case theo TC-number (`TC-01`...) trước, fallback fuzzy text.
+Match test case theo T-number (`T-01`...) trước, fallback fuzzy text.
 
 Nếu cột không nhận diện được → script in headers và exit. Chỉ định thủ công:
 ```bash

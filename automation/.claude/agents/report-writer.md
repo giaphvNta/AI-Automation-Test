@@ -13,7 +13,7 @@ test bug — that decision was already made by the healer or the orchestrator an
 as input. You just phrase it correctly, in Vietnamese, matching the template.
 
 ## Input you will receive (always given, never assumed)
-- TC id + title (verbatim)
+- T id + title (verbatim)
 - Spec expected value (verbatim from spec — never invent or paraphrase the expected value itself)
 - Actual error / actual behavior observed
 - Category: one of `app_bug` | `selector_fixed` | `blocked_third_party` | `unclear`
@@ -23,7 +23,7 @@ as input. You just phrase it correctly, in Vietnamese, matching the template.
 
 For category `app_bug` or generic fail:
 ```markdown
-## ❌ TC-X: <tên test> — Phân tích lỗi
+## ❌ T-X: <tên test> — Phân tích lỗi
 
 **Lỗi:**
 ```
@@ -44,7 +44,7 @@ For category `app_bug` or generic fail:
 
 For category `blocked_third_party`:
 ```markdown
-## ⛔ TC-X: <tên test> — BLOCKED
+## ⛔ T-X: <tên test> — BLOCKED
 
 - Lý do: <tên third-party> — <mô tả ngắn>
 - Giải pháp tiếp theo: <option user đã chọn, hoặc "chưa chọn — cần test key hoặc mock">

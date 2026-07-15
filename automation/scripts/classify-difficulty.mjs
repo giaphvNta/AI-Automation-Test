@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Phân loại độ khó TC từ spec markdown (deterministic, 0 token AI).
+// Phân loại độ khó T từ spec markdown (deterministic, 0 token AI).
 //
 // Usage:
 //   node scripts/classify-difficulty.mjs projects/<name>/specs/<slug>.md
@@ -130,7 +130,7 @@ function parseTableCases(markdown) {
   for (const cells of rows) {
     if (!/^\d+[a-z]?$/i.test(cells[idx.id] || '')) continue;
     cases.push({
-      id: `TC-${cells[idx.id]}`,
+      id: `T-${cells[idx.id]}`,
       service: cells[idx.service] || '',
       screen: cells[idx.screen] || '',
       title: cells[idx.title] || '',

@@ -60,7 +60,7 @@ Sau khi đọc, xuất ngay dòng self-check trước khi tiếp tục:
 
 > Mục tiêu: main context mỏng. Script xử lý việc deterministic; AI/agent chỉ làm AUTHOR, HEAL, và phân tích lỗi cần suy luận.
 > Sau mỗi pha `done` hoặc `skipped`, trạng thái nằm trong `projects/<name>/.run-checklist.md` + `.run-state.json`; không giữ reasoning/log dài trong context. Nếu phiên đã dài, dùng `/clear` hoặc mở phiên mới rồi resume bằng 2 file này.
-> Với DEV/người dùng, vẫn chỉ chạy **một lệnh**: `/ai-test ...` hoặc `/ai-test-i`. Các lệnh `prep-run/finalize-run/checklist` là nội bộ pipeline, KHÔNG yêu cầu dev chạy tay.
+> Với DEV/người dùng, vẫn chỉ có **một entrypoint**: Claude Code dùng `/ai-test ...` hoặc `/ai-test-i`; Codex dùng prompt "đọc SKILL.md và chạy pipeline cho ...". Các lệnh `prep-run/finalize-run/checklist` là nội bộ pipeline, KHÔNG yêu cầu dev chạy tay.
 
 ### Pha 1: PREP
 
@@ -99,7 +99,7 @@ Nguồn đọc bắt buộc:
 - `SCREENS.md` hoặc Knowledge Graph chỉ khi flag tương ứng bật
 
 Quy tắc routing:
-- Sheet/spec đã có TC chi tiết → spec chính là plan, không gọi agent.
+- Sheet/spec đã có T chi tiết → spec chính là plan, không gọi agent.
 - `simple` trong difficulty → tự viết hoặc dùng SCREENS; tránh agent nếu selector rõ.
 - `medium` → dùng SCREENS/KG trước, agent chỉ khám phá phần UI thiếu.
 - `hard` → cần khám phá DOM thật, dùng Agent `playwright-test-generator` (xem "Cách gọi agent tuỳ
@@ -107,19 +107,22 @@ Quy tắc routing:
 - `blocked` captcha/third-party → mock/test key hoặc đánh BLOCKED theo Rule #15; không đốt heal loop.
 
 **Cách gọi agent tuỳ biến (generator/planner/healer/report-writer):**
-Gọi THẲNG tên agent làm `subagent_type` (vd `subagent_type: "playwright-test-generator"`) — **đã
-verify hoạt động đúng trên `claude` CLI thật** (native, tự áp `model`/`tools`/persona từ frontmatter
-`.claude/agents/*.md`, không cần lặp lại trong prompt). Đây là cách CHÍNH, dùng mặc định.
+Nếu tool hỗ trợ custom sub-agent kiểu Claude Code, gọi THẲNG tên agent làm `subagent_type`
+(vd `subagent_type: "playwright-test-generator"`). Claude Code tự áp `model`/`tools`/persona từ
+frontmatter `.claude/agents/*.md`.
 
-**Fallback (chỉ khi gặp lỗi):** một số môi trường (đã gặp ở sandbox nội bộ) không nhận diện
-`subagent_type` tuỳ biến, báo `Agent type not found`. Khi đó dùng lại: gọi Agent tool với
-`subagent_type: "general-purpose"`, kèm `model: "<model ghi trong frontmatter agent, vd sonnet/haiku>"`,
-và trong prompt yêu cầu nó **đọc file persona trước khi làm gì khác**, ví dụ:
+Nếu chạy trên Codex hoặc môi trường không có custom sub-agent registry, dùng cùng persona file nhưng
+thực thi inline hoặc bằng agent tổng quát nếu tool có hỗ trợ. Bắt buộc đọc file persona trước khi làm,
+ví dụ:
 > "Đọc `automation/.claude/agents/playwright-test-generator.md` — đây LÀ vai trò và luật của bạn
 > cho task này. Sau khi đọc, thực hiện: <task cụ thể>. Tuân thủ đúng format output đã định nghĩa
 > trong file đó."
 
-Seed data: đọc `skills/ai-test/steps/STEP-3b-seed.md` chỉ khi TC cần data thiếu. Dùng AI_KEY marker; không hỏi user trừ khi bị chặn bởi third-party/plugin.
+**Quy tắc delegate (bắt buộc):**
+- Trước khi gọi bất kỳ Agent nào, orchestrator phải báo cho user MỘT dòng: "Delegate <task> cho <tên agent> vì <lý do>". Không gọi Agent im lặng.
+- Không tự escalate lên model/agent nặng hơn mức difficulty gợi ý. Nếu difficulty là simple/medium mà muốn dùng agent khám phá DOM (playwright-test-generator) hoặc model/effort cao hơn, phải xin phép user trước, nêu rõ mục đích + vì sao cần resource nặng hơn. Chưa được phép thì giữ ở mức nhẹ hoặc hỏi user.
+
+Seed data: đọc `skills/ai-test/steps/STEP-3b-seed.md` chỉ khi T cần data thiếu. Dùng AI_KEY marker; không hỏi user trừ khi bị chặn bởi third-party/plugin.
 
 Khi AUTHOR xong, update status/checklist rồi có thể xóa context dài:
 ```bash
@@ -127,11 +130,11 @@ bash scripts/update-status.sh 2 author "<name>" "Author done" 0 normal done --no
 ```
 
 Quy tắc test code giữ nguyên:
-- TC ID khớp 1-1 với spec/sheet (`TC-31: ...` không đánh số lại).
+- T ID khớp 1-1 với spec/sheet (`T-31: ...` không đánh số lại).
 - Expected/assertion lấy nguyên văn từ spec/sheet, không lấy từ app/source.
 - Selector ưu tiên `getByRole` > `getByLabel` > `getByText` > CSS.
 - Không `waitForTimeout`, không fake assertion, không `test.skip/fixme/fail` để che bug.
-- Mỗi TC phải có screenshot evidence sau assertion chính.
+- Mỗi T phải có screenshot evidence sau assertion chính.
 
 ### Pha 3: RUN+HEAL
 
@@ -154,7 +157,7 @@ Nếu fail và không phải `--fast`:
    Healer kết thúc bằng JSON `{tc_fixed, tc_app_bug, root_cause_summary, patched_files}` — luôn chạy
    trong context RIÊNG của Agent call này, không vào cache của main.
 3. Rerun batch `tc_fixed` bằng HEAL_RUN_ID riêng:
-   `TEST_RUN_ID="${RUN_ID}_h${heal_count}" SPEC_FILE=... ./scripts/run-test.sh <name> --grep "TC-7:|TC-14:"`
+   `TEST_RUN_ID="${RUN_ID}_h${heal_count}" SPEC_FILE=... ./scripts/run-test.sh <name> --grep "T-7:|T-14:"`
 4. Merge:
    `node scripts/heal/merge-heal.mjs <name> "$RUN_ID" "$HEAL_RUN_ID"`
 
@@ -185,12 +188,12 @@ bash scripts/update-status.sh 4 finalize "<name>" "Done" 0 normal done
 - copy checklist vào run dir (`<run-dir>/.run-checklist.md`) và mark finalize done.
 - reset project-level `.run-state.json`/`.run-checklist.md` về `idle` để lần chạy sau không resume nhầm state cũ. Run-level state/checklist vẫn giữ trong run dir để audit.
 
-Nếu còn fail/app bug, viết section phân tích lỗi tiếng Việt cho MỖI TC fail/BLOCKED rồi append vào
+Nếu còn fail/app bug, viết section phân tích lỗi tiếng Việt cho MỖI T fail/BLOCKED rồi append vào
 cuối `AI_REPORT.md` (không tự ráp lại bảng token/path/video — script đã làm). Cách viết:
 - Đã có sẵn dữ liệu quyết định (từ healer's `root_cause_summary`/`tc_app_bug`, hoặc rõ ràng tự thấy)
   → gọi Agent `subagent_type: "report-writer"` (xem "Cách gọi agent tuỳ biến" ở Pha 2 — tự áp
   `model: haiku` từ frontmatter, rẻ vì task chỉ là phrasing, KHÔNG cần suy luận). Prompt đưa CHỈ
-  dữ liệu đã quyết định (TC id/title, expected verbatim từ spec, lỗi thực tế, category:
+  dữ liệu đã quyết định (T id/title, expected verbatim từ spec, lỗi thực tế, category:
   `app_bug|selector_fixed|blocked_third_party|unclear`) — KHÔNG đưa cả transcript/DOM.
   Writer chỉ phrasing, không tự judge lại category.
 - Chưa rõ category (case lạ, chưa qua healer) → main tự phân tích trực tiếp, KHÔNG gọi writer.
@@ -206,14 +209,14 @@ TEST_MOCK_<BIẾN>=true SPEC_FILE=... ./scripts/run-test.sh <name>
 
 ### Phương án 2: Đổi env thật trong container (BẮT BUỘC confirm)
 
-1. In rõ: `Để test <TC-list> cần đổi <VAR>=<old>→<new> trong <container>. Restore sau. Đồng ý?`
+1. In rõ: `Để test <T-list> cần đổi <VAR>=<old>→<new> trong <container>. Restore sau. Đồng ý?`
 2. Chờ "Yes" — KHÔNG tự đổi
 3. Đổi: `docker exec <container> sed -i 's/<old>/<new>/' <env_file>`
 4. Chạy test
 5. Restore BẮT BUỘC dù fail: `docker exec <container> sed -i 's/<new>/<old>/' <env_file>`
 6. Ghi vào report: env đã thay đổi và đã restore
 
-User từ chối → đánh dấu TC là BLOCKED.
+User từ chối → đánh dấu T là BLOCKED.
 
 ---
 

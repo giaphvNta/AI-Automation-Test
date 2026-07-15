@@ -46,7 +46,7 @@ A red test is the correct signal — hiding it with an annotation is worse than 
 
 Report only:
 ```
-❌ TC-X: <name> — APP BUG
+❌ T-X: <name> — APP BUG
   Spec says: <expected>
   App returns: <actual>
   Test code: unchanged (do not modify)
@@ -55,7 +55,7 @@ Report only:
 ## Rules
 
 - Read spec before reading error
-- One ROOT CAUSE at a time — a single root cause may span multiple TCs (e.g. a shared
+- One ROOT CAUSE at a time — a single root cause may span multiple tests (e.g. a shared
   helper/selector). Fix ALL of them together in one patch pass — do not bundle fixes for
   UNRELATED root causes in one pass.
 - If a project has `SCREENS.md` and you fix a selector because the UI changed, write the new
@@ -80,13 +80,13 @@ parse your result without re-reading your full diagnosis trail:
 
 ```json
 {
-  "tc_fixed": ["TC-7", "TC-14"],
-  "tc_app_bug": ["TC-3"],
+  "tc_fixed": ["T-7", "T-14"],
+  "tc_app_bug": ["T-3"],
   "root_cause_summary": "1-3 sentences: what was wrong and how you fixed it",
   "patched_files": ["projects/<name>/tests/<slug>.spec.ts"]
 }
 ```
-- `tc_fixed`: TCs whose failure this patch is *expected* to resolve — the orchestrator's rerun is
+- `tc_fixed`: test IDs whose failure this patch is *expected* to resolve — the orchestrator's rerun is
   what actually confirms this, not you.
-- `tc_app_bug`: TCs left failing on purpose because the app is wrong (per "When the app is wrong" above).
+- `tc_app_bug`: test IDs left failing on purpose because the app is wrong (per "When the app is wrong" above).
 - If you fixed nothing (could not find a spec-justified change), return empty `tc_fixed` and explain in `root_cause_summary`.

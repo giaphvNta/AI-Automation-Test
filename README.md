@@ -1,6 +1,6 @@
 # AI Automation Test
 
-> **1 lệnh `/ai-test` → AI tự plan, generate, chạy headless, auto-repair, sinh báo cáo + video.**  
+> **Claude Code:** gõ `/ai-test`. **Codex:** dùng prompt đọc `skills/ai-test/SKILL.md`.  
 > Dev không cần làm gì ngoài gõ lệnh và xem kết quả.
 
 ---
@@ -29,15 +29,15 @@
 |---|---|---|
 | OS | Windows + WSL2 hoặc macOS | Windows đã verify trên Ubuntu 22/24; macOS chạy trực tiếp bằng Terminal |
 | Docker Desktop | >= 24.0 | **BẮT BUỘC** — chạy Chromium trong container |
-| VS Code | >= 1.105 | Để dùng Claude Code extension |
-| Claude Code extension | Bất kỳ | Để dùng slash command |
+| AI tool | Claude Code hoặc Codex | Claude Code dùng slash command; Codex đọc cùng skill/pipeline trong repo |
+| VS Code | >= 1.105 | Chỉ bắt buộc nếu dùng Claude Code extension |
 | Node.js (WSL/macOS) | >= 18 | Thường đã có sẵn |
 
 ---
 
 ## Cài đặt lần đầu
 
-> Chạy **1 lần duy nhất** trên mỗi máy. Sau khi cài, `/ai-test` và `/ai-test-i` dùng được từ **bất kỳ project nào** — không cần cấu hình thêm ở từng project.
+> Chạy **1 lần duy nhất** trên mỗi máy. Với Claude Code, setup đăng ký `/ai-test` và `/ai-test-i` dùng được từ **bất kỳ project nào**. Với Codex, core pipeline vẫn nằm trong repo và chạy bằng cách yêu cầu Codex đọc `skills/ai-test/SKILL.md`.
 
 ### Bước 1: Chuẩn bị Docker Desktop
 
@@ -72,7 +72,8 @@ cd ~/ai-automation-test   # thay bằng nơi bạn clone repo
 Script tự động:
 - ✅ Kiểm tra Docker
 - ✅ Verify automation hub (agents, config)
-- ✅ Đăng ký slash command `/ai-test` + `/ai-test-i` vào `~/.claude/commands/` (global — dùng được mọi project)
+- ✅ Đăng ký slash command `/ai-test` + `/ai-test-i` vào `~/.claude/commands/` cho Claude Code (global — dùng được mọi project)
+- ✅ Ghi `~/.ai-automation-test-root` để Codex/tool khác biết automation hub nằm ở đâu khi đang mở project khác
 - ✅ Tạo `.gitignore`
 
 **Gỡ cài đặt** (xóa slash commands, giữ nguyên repo + Docker image):
@@ -93,26 +94,88 @@ docker compose build playwright
 
 > Lần đầu mất ~3–5 phút (download base image ~1.5GB). Các lần sau nhanh hơn vì được cache.
 
-### Bước 4: Reload VSCode
+### Bước 4: Reload AI tool
 
-`Ctrl+Shift+P` → **Developer: Reload Window**
+Claude Code extension: `Ctrl+Shift+P` → **Developer: Reload Window**. Codex: mở phiên mới hoặc yêu cầu Codex đọc lại `skills/ai-test/SKILL.md`.
 
 ### Bước 5: Verify
 
-Gõ trong Claude Code chat:
+Claude Code:
 ```
 /ai-test
 ```
 → Hook validate **chặn** và nhắc thiếu `--project`/input — đó chính là dấu hiệu hook + command đã nạp đúng. Muốn vào chế độ tương tác (AI hỏi qua picker), gõ `/ai-test-i`.
 
+Codex:
+```
+Đọc skills/ai-test/SKILL.md và chạy pipeline cho: <input> --project=<name> [options]
+```
+Nếu Codex đang mở repo/project khác, dùng marker do `setup.sh` tạo:
+```
+Chạy cat ~/.ai-automation-test-root để lấy APP_ROOT.
+Sau đó đọc <APP_ROOT>/skills/ai-test/SKILL.md và chạy pipeline cho:
+<input> --project=<name> [options]
+```
+**Không gõ `/ai-test` trong Codex** — Codex sẽ hiểu đó là text thường và đi tìm file/lệnh `ai-test`
+trong project hiện tại. `/ai-test` chỉ dành cho Claude Code.
+
+Codex dùng cùng script trong `automation/scripts/`, cùng checklist/state/report; chỉ không dùng slash command Claude.
+
 ---
 
 ## Cách dùng
+
+### Chạy bằng Claude Code
+
+Claude Code dùng slash command đã đăng ký bởi `setup.sh`:
 
 ### Cú pháp
 
 ```
 /ai-test <input> --project=<tên-project> [options]
+```
+
+### Chạy bằng Codex
+
+Codex không cần slash command. Giao task theo dạng:
+
+```
+Đọc skills/ai-test/SKILL.md và chạy pipeline cho:
+<input> --project=<tên-project> [options]
+```
+
+Khi đang làm trong project khác, dùng marker global:
+
+```
+Chạy cat ~/.ai-automation-test-root để lấy APP_ROOT.
+Sau đó đọc <APP_ROOT>/skills/ai-test/SKILL.md và chạy pipeline cho:
+<input> --project=<tên-project> [options]
+```
+
+Codex dùng cùng `automation/scripts/`, cùng `projects/<name>/.run-state.json`, `.run-checklist.md`,
+`AI_REPORT.md`, video và write-back. Các phần riêng của Claude Code như `~/.claude/commands`,
+custom sub-agent registry hoặc token log chỉ là adapter/phụ trợ; core pipeline vẫn chạy được trên Codex.
+
+**Đã verify trên Codex (2026-07-13):**
+- PREP đọc spec dạng mô tả, check Docker/node_modules/agent files OK.
+- AUTHOR chạy bằng fallback Codex: đọc persona trong `automation/.claude/agents/*.md` rồi viết Playwright test trực tiếp.
+- RUN chạy Docker headless qua `scripts/run-test.sh`, lint gate OK, sinh `results.json`, screenshot, trace, video.
+- HEAL chạy đúng `HEAL_RUN_ID` riêng, merge về run gốc, report đánh dấu healed.
+- FINALIZE convert `full-session.mp4`, sinh `AI_REPORT.md`, lưu source-meta, reset project state về `idle`.
+- Source-meta reuse OK: chạy lại cùng input ra `source_meta_status="same"` và `should_author=false`, sau đó rerun test cũ pass 3/3.
+
+Smoke run mẫu:
+- HEAL path: `automation/projects/codex-smoke/test-results/runs/13_07_2026_15_39_22_659/AI_REPORT.md`
+- Skip-author rerun pass sạch: `automation/projects/codex-smoke/test-results/runs/13_07_2026_15_45_42_453/AI_REPORT.md`
+
+Run này không test Google Sheet/Doc write-back vì cần `service-auth.json` và URL thật; các script đó dùng chung pipeline và chỉ chạy khi truyền `--sheet`/`--doc`.
+
+Ví dụ Codex, khi đang mở project app khác:
+
+```
+Chạy cat ~/.ai-automation-test-root để lấy APP_ROOT.
+Sau đó đọc <APP_ROOT>/skills/ai-test/SKILL.md và chạy pipeline cho:
+https://docs.google.com/spreadsheets/d/<ID>/edit?gid=<GID>#gid=<GID> --project=orec --live --screens --kg --sheet-tab="TECHNOGREEN-25" --sheet="https://docs.google.com/spreadsheets/d/<ID>/edit?gid=<GID>#gid=<GID>"
 ```
 
 ### Dạng input được hỗ trợ
@@ -124,7 +187,6 @@ Gõ trong Claude Code chat:
 | URL spec | `https://backlog.example.com/wiki/...` | |
 | Google Sheet | `https://docs.google.com/spreadsheets/d/<ID>/edit` | cần `service-auth.json`; dùng `--sheet-tab=<tên>` để chỉ tab cụ thể |
 | Google Doc | `https://docs.google.com/document/d/<ID>/edit` | cần `service-auth.json` — 🔧 chưa test |
-| Confluence | `https://<domain>.atlassian.net/wiki/...` | cần `CONFLUENCE_EMAIL/TOKEN` — 🔧 chưa test |
 
 ### Ví dụ
 
@@ -153,12 +215,6 @@ Gõ trong Claude Code chat:
 ```
 > Cần `service-auth.json` và Google Docs API được enable — xem [Setup Google Docs](#google-docs-input).
 
-**Test từ Confluence** 🔧 (chưa test):
-```
-/ai-test https://<domain>.atlassian.net/wiki/spaces/<SPACE>/pages/<id> --project=customer-a
-```
-> Cần `CONFLUENCE_EMAIL` + `CONFLUENCE_TOKEN` — xem [Setup Confluence](#confluence-input).
-
 **Chạy lại test đã có (không sinh code mới):**
 ```
 /ai-test --rerun --project=customer-a
@@ -174,9 +230,9 @@ Gõ trong Claude Code chat:
 /ai-test ./spec.md --project=customer-a --interactive
 ```
 
-### Chế độ tương tác `/ai-test-i` (không cần nhớ flag)
+### Chế độ tương tác `/ai-test-i` cho Claude Code
 
-Không muốn nhớ cú pháp flag? Gõ `/ai-test-i` — AI sẽ **hỏi qua picker** những gì còn thiếu:
+Không muốn nhớ cú pháp flag khi dùng Claude Code? Gõ `/ai-test-i` — AI sẽ **hỏi qua picker** những gì còn thiếu:
 
 ```
 /ai-test-i
@@ -193,7 +249,7 @@ Sau khi đủ tham số, `/ai-test-i` chạy **đúng pipeline 4 pha nội bộ 
 /ai-test-i --project=customer-a          # chỉ còn hỏi nguồn test + chế độ
 ```
 
-> **Hook validate:** Khi gõ `/ai-test` mà **thiếu `--project` hoặc input**, một hook (`UserPromptSubmit`) sẽ chặn lệnh và in hướng dẫn, tránh chạy nhầm với tham số không đầy đủ. `/ai-test-i` không bị chặn vì nó tự hỏi. Hook tự bỏ qua (fail open) nếu máy chưa cài `jq`.
+> **Hook validate:** Khi gõ `/ai-test` trong Claude Code mà **thiếu `--project` hoặc input**, một hook (`UserPromptSubmit`) sẽ chặn lệnh và in hướng dẫn, tránh chạy nhầm với tham số không đầy đủ. `/ai-test-i` không bị chặn vì nó tự hỏi. Hook tự bỏ qua (fail open) nếu máy chưa cài `jq`. Codex không chạy hook/slash command này.
 
 ### Điều gì xảy ra sau khi gõ lệnh?
 
@@ -438,8 +494,8 @@ Chi tiết: `automation/scripts/knowledge/README.md`.
 
 ## Đo token tiêu thụ (bằng chứng A/B)
 
-Token tiêu thụ ở **pha authoring** (agent đọc source/DOM), không phải lúc chạy test. Đo bằng log
-phiên Claude Code thật:
+Token tiêu thụ ở **pha authoring** (agent đọc source/DOM), không phải lúc chạy test. Hiện tool đo token
+đọc log Claude Code khi có; trên Codex hoặc tool không có log tương thích thì session freshness fail-open:
 ```bash
 cd automation
 npm run kg:tokens -- --latest      # đo phiên mới nhất
@@ -448,17 +504,20 @@ npm run session:fresh              # cảnh báo nếu phiên hiện tại đã 
 ```
 `TỔNG (billed)` = input + output + cache. AI_REPORT.md cũng tự log mục 💰 token (snapshot lúc report).
 
-Claude Code không xóa riêng phần `cache_read` giữa một phiên chat: mỗi lượt sau có thể đọc lại toàn bộ
-tiền tố đã cache. Vì vậy mỗi lần `/ai-test` nên chạy trong một phiên riêng, hoặc `/clear` trước khi bắt
-đầu rồi resume bằng `projects/<project>/.run-checklist.md` + `.run-state.json`, đặc biệt nếu dự kiến có
-nhiều vòng authoring/heal. Pha PREP tự chạy `check-session-freshness.mjs` theo kiểu advisory: phiên quá
-dài chỉ cảnh báo và ghi `session_freshness` vào state/report, không bao giờ chặn pipeline.
+AI tool không xóa riêng phần cache/context đã tích lũy trong cùng một phiên: mỗi lượt sau có thể đọc lại
+toàn bộ tiền tố đã cache. Vì vậy mỗi lần `/ai-test` nên chạy trong một phiên riêng, hoặc clear context
+trước khi bắt đầu rồi resume bằng `projects/<project>/.run-checklist.md` + `.run-state.json`, đặc biệt nếu
+dự kiến có nhiều vòng authoring/heal. Pha PREP tự chạy `check-session-freshness.mjs` theo kiểu advisory:
+khi đọc được log Claude Code thì phiên quá dài sẽ được cảnh báo và ghi `session_freshness` vào state/report;
+trên Codex hoặc tool không có log tương thích, check này fail-open và không bao giờ chặn pipeline.
+Nếu máy có log Claude Code cũ, Codex có thể vẫn thấy `session_freshness.source="claude-code-latest"`;
+đây chỉ là cảnh báo chi phí/token, không ảnh hưởng kết quả test.
 
 **Số chuẩn để so A/B**: Stop hook `.claude/hooks/token-stop-hook.sh` tự ghi `<run-dir>/token.json`
 khi phiên kết thúc — đủ cả phần đuôi run + sub-agent, không phụ thuộc agent nhớ đo. Lấy `total_billed`
 trong `token.json` khi so sánh.
 
-So A/B: chạy cùng 1 TC — 1 lần không `--kg`, 1 lần có `--kg` (mỗi lần **1 phiên riêng**) → so `total_billed`.
+So A/B: chạy cùng 1 T — 1 lần không `--kg`, 1 lần có `--kg` (mỗi lần **1 phiên riêng**) → so `total_billed`.
 Chi tiết: `automation/scripts/knowledge/MEASURE-TOKENS.md`.
 
 ---
@@ -552,60 +611,6 @@ node scripts/load-google-doc.mjs "https://docs.google.com/document/d/<ID>/edit" 
 
 ---
 
-### Confluence input
-
-> ⚠️ Script viết xong, **chưa test** — verify trước khi dùng production.
-
-**Bước 1: Lấy API token**
-
-Vào [id.atlassian.com → Security → API tokens](https://id.atlassian.com/manage-profile/security/api-tokens) → Create API token.
-
-**Bước 2: Set env vars** (thêm vào `~/.bashrc` hoặc `~/.zshrc` để dùng lâu dài):
-
-```bash
-export CONFLUENCE_EMAIL="you@company.com"
-export CONFLUENCE_TOKEN="<api-token>"
-```
-
-**Bước 3: Dùng Confluence URL làm input:**
-
-```
-/ai-test https://<domain>.atlassian.net/wiki/spaces/<SPACE>/pages/<id> --project=customer-a
-```
-
-**Định dạng URL được hỗ trợ:**
-
-| Loại | Ví dụ |
-|---|---|
-| Atlassian Cloud | `https://<domain>.atlassian.net/wiki/spaces/<SPACE>/pages/<id>/<title>` |
-| Atlassian Cloud (rút gọn) | `https://<domain>.atlassian.net/wiki/spaces/<SPACE>/pages/<id>` |
-| Confluence Server/DC | `https://confluence.example.com/display/<SPACE>/<title>?pageId=<id>` |
-
-**Chạy thủ công** (để xem output trước):
-
-```bash
-cd ~/ai-automation-test/automation
-
-# Dùng env vars
-node scripts/load-confluence.mjs "https://<domain>.atlassian.net/wiki/spaces/<SPACE>/pages/<id>"
-
-# Dùng flags trực tiếp
-node scripts/load-confluence.mjs "https://..." \
-  --email="you@company.com" \
-  --token="<api-token>" \
-  --out=specs/input.md
-```
-
-**Flags:**
-
-| Flag | Mặc định | Mô tả |
-|---|---|---|
-| `--email=<email>` | `$CONFLUENCE_EMAIL` | Email Atlassian account |
-| `--token=<token>` | `$CONFLUENCE_TOKEN` | API token từ id.atlassian.com |
-| `--out=<path>` | stdout | Lưu output ra file |
-
----
-
 ### Ghi kết quả test ngược về Google Sheet
 
 > ⚠️ Script viết xong, **chưa test** — verify trước khi dùng production.
@@ -622,7 +627,7 @@ Script tự phân tích header của sheet, nhận diện từng cột theo tên
 | `Safari`, `WebKit` | chứa keyword browser | kết quả chạy trên WebKit (nếu có) |
 | `Firefox` | chứa keyword browser | kết quả chạy trên Firefox (nếu có) |
 | `Status`, `Result`, `Kết quả` | keyword status | `✅ PASS` / `❌ FAIL` tổng hợp |
-| `Tester`, `Tested by`, `QA` | keyword tester | `Claude AI` (hoặc giá trị `--tester`) |
+| `Tester`, `Tested by`, `QA` | keyword tester | `AI Automation` (hoặc giá trị `--tester`) |
 | `Test date`, `Date`, `Ngày` | keyword date | ngày giờ chạy (`2026-06-05 09:15`) |
 | `Notes`, `Error`, `Ghi chú` | keyword note | error message nếu fail |
 
@@ -673,7 +678,7 @@ node scripts/write-results-to-sheet.mjs \
   --result-col="Status" \
   --date-col="Test date" \
   --tester-col="Tester" \
-  --tester="Claude AI" \
+  --tester="AI Automation" \
   --note-col="Notes"
 ```
 
@@ -687,7 +692,7 @@ node scripts/write-results-to-sheet.mjs \
 | `--result-col=<col>` | Không | Cột Status/Result tổng hợp — auto-detect |
 | `--date-col=<col>` | Không | Cột ghi ngày chạy — auto-detect |
 | `--tester-col=<col>` | Không | Cột Tester — auto-detect |
-| `--tester=<name>` | Không | Giá trị điền vào cột Tester (mặc định: `Claude AI`) |
+| `--tester=<name>` | Không | Giá trị điền vào cột Tester (mặc định: `AI Automation`) |
 | `--note-col=<col>` | Không | Cột ghi error message khi fail — auto-detect |
 | `--result-col=<col>` | Không | Cột kết quả — **BẮT BUỘC chỉ định khi sheet tiếng Nhật hoặc có nhiều cột kết quả** |
 | `--start-row=<n>` | Không | Dòng data đầu tiên (mặc định: `2`) |
@@ -803,7 +808,6 @@ node scripts/write-results-to-doc.mjs \
     │   ├── update-status.sh         ← Ghi trạng thái bước hiện tại cho dashboard
     │   ├── load-google-sheet.mjs    ← Đọc Google Sheet
     │   ├── load-google-doc.mjs      ← Đọc Google Doc 
-    │   ├── load-confluence.mjs      ← Đọc Confluence page (🔧 chưa test)
     │   ├── write-results-to-sheet.mjs ← Ghi kết quả về Google Sheet 
     │   └── write-results-to-doc.mjs   ← Ghi kết quả vào Google Doc 
     │
@@ -842,12 +846,21 @@ node scripts/write-results-to-doc.mjs \
 
 ## Troubleshooting
 
-### `/ai-test`: Unknown command
+### `/ai-test`: Unknown command hoặc Codex đi tìm file `ai-test`
 
 → Reload Window chưa được:  
 `Ctrl+Shift+P` → **Developer: Reload Window**
 
 Nếu vẫn lỗi → chạy lại `./setup.sh`.
+
+Nếu dùng Codex mà thấy nó nói kiểu "không thấy file `ai-test`" hoặc "inspecting repo entry points",
+nghĩa là bạn đã gõ nhầm slash command của Claude. Hãy dùng prompt Codex:
+
+```
+Chạy cat ~/.ai-automation-test-root để lấy APP_ROOT.
+Sau đó đọc <APP_ROOT>/skills/ai-test/SKILL.md và chạy pipeline cho:
+<input> --project=<name> [options]
+```
 
 ### Docker: `command not found`
 
@@ -861,6 +874,11 @@ Nếu vẫn lỗi → chạy lại `./setup.sh`.
 ### Docker: `Cannot connect to Docker daemon`
 
 → Docker Desktop chưa chạy. Mở Docker Desktop, chờ trạng thái ổn định rồi thử lại.
+
+Nếu chạy trong Codex mà Docker Desktop đã bật nhưng vẫn báo lỗi permission denied khi kết nối
+Docker daemon socket, hãy cho phép Codex chạy lệnh Docker ngoài sandbox khi được hỏi. Các bước
+cần Docker socket gồm `check-env`, `prep-run` (vì check Docker), `run-test.sh`, và `finalize-run`
+(convert video).
 
 ### Docker image chưa có
 

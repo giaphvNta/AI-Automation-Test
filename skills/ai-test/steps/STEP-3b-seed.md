@@ -21,13 +21,13 @@ Trước khi sinh plan/code, rà từng scenario để xác định data có đ�
 | Thiếu date range | Dùng ngày hiện tại ± 7 ngày |
 | Layout cần có items | Fake ≥ 1 item tối thiểu, ghi rõ là fake trong comment test |
 
-**Ngoại lệ duy nhất** (Rule #15): TC bị block bởi plugin bên thứ ba (hCaptcha, payment SDK...) → không fake-pass, hỏi user qua AskUserQuestion.
+**Ngoại lệ duy nhất** (Rule #15): T bị block bởi plugin bên thứ ba (hCaptcha, payment SDK...) → không fake-pass, hỏi user qua AskUserQuestion.
 
 ## Quy tắc seed data BẮT BUỘC
 
 ### Seed #0 — Seed theo spec, không theo app config
 
-Số records và điều kiện phải lấy từ spec/sheet. Ví dụ: TC ghi "lần thứ 6 → 403" → seed đúng **5 records**. TUYỆT ĐỐI KHÔNG chạy lệnh đọc config app để lấy threshold:
+Số records và điều kiện phải lấy từ spec/sheet. Ví dụ: T ghi "lần thứ 6 → 403" → seed đúng **5 records**. TUYỆT ĐỐI KHÔNG chạy lệnh đọc config app để lấy threshold:
 ```bash
 # ❌ CẤM — che giấu bug nếu app config sai so với spec:
 docker exec <fpm> php artisan tinker --execute "echo config('behavior.hourly_limit');"
@@ -56,7 +56,7 @@ Mọi record do AI tạo phải có marker để phân biệt với data thật.
 const seedEmail = `e2e-ai-tc15-${Date.now()}@test.local`;
 
 // Hoặc dùng field memo/note:
-// note: 'E2E_AI_TC-15'
+// note: 'E2E_AI_T-15'
 
 await dbQuery(`INSERT INTO potential_users (mailaddress, ip_address, created_at)
   VALUES ('${seedEmail}', '${seedIp}', NOW())`);

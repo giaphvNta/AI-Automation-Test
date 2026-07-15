@@ -23,13 +23,13 @@
 12. **Convert video BẮT BUỘC trong Pha 4 FINALIZE** — convert webm→mp4 sau MỌI lần test. Không skip dù 100% pass.
 13. **Report + source-meta BẮT BUỘC trong Pha 4 FINALIZE** — sinh AI_REPORT.md và lưu source-meta. Context dài/token nhiều KHÔNG phải lý do skip.
 14. **Source-meta BẮT BUỘC lưu** sau mỗi run — không lưu = lần sau phải generate lại từ đầu.
-15. **TC bị chặn bởi plugin bên thứ ba → HỎI trước, KHÔNG fake-pass** — `scripts/lint-test.sh` tự chạy trong run-test.sh và **chặn cứng** các pattern sau (test không được chạy nếu vi phạm). TUYỆT ĐỐI KHÔNG dùng:
+15. **T bị chặn bởi plugin bên thứ ba → HỎI trước, KHÔNG fake-pass** — `scripts/lint-test.sh` tự chạy trong run-test.sh và **chặn cứng** các pattern sau (test không được chạy nếu vi phạm). TUYỆT ĐỐI KHÔNG dùng:
     - `expect(true).toBe(true)` — assertion giả
     - `|| true` trong điều kiện kiểm tra
     - `expect(1).toBe(1)` hoặc bất kỳ assertion luôn đúng bất kể app làm gì
     - Comment "verified manually" thay cho assertion thật
 
-    Khi TC bị block bởi hCaptcha/reCAPTCHA/OTP/payment SDK: xử lý trong Pha 2 AUTHOR, hỏi user qua AskUserQuestion với 2 option: **(1) Cung cấp key/credential test** hoặc **(2) Mock lớp chặn**. User không chọn → đánh dấu **BLOCKED** trong report.
+    Khi T bị block bởi hCaptcha/reCAPTCHA/OTP/payment SDK: xử lý trong Pha 2 AUTHOR, hỏi user qua AskUserQuestion với 2 option: **(1) Cung cấp key/credential test** hoặc **(2) Mock lớp chặn**. User không chọn → đánh dấu **BLOCKED** trong report.
 
 16. **KHÔNG tự đọc `.env`/credential** — Trước khi đọc `.env`, `*.key`, `*secret*`, `service-auth.json`, hoặc file config chứa key/token của project, PHẢI hỏi user: mục đích + tên file. Chờ đồng ý. Vi phạm 1 lần = lỗi nghiêm trọng.
 
@@ -47,6 +47,6 @@
 
 **Seed #0:** Seed theo spec, không theo app config — Số lượng records lấy từ spec/sheet (vd: "lần thứ 6 → 403" = seed đúng 5 records). TUYỆT ĐỐI KHÔNG đọc app config (`tinker`, `grep config/`, `.env app`) để lấy threshold — làm vậy che giấu bug: app config sai vs spec → test vẫn xanh.
 
-**Seed AI_KEY:** Mọi record seed phải có marker phân biệt — dùng field có thể nhận diện (vd: `mailaddress LIKE 'e2e-ai-tc%'` hoặc field note/memo chứa `E2E_AI_<TC_ID>`). Cleanup chỉ xóa records có marker này, KHÔNG xóa data không có marker.
+**Seed AI_KEY:** Mọi record seed phải có marker phân biệt — dùng field có thể nhận diện (vd: `mailaddress LIKE 'e2e-ai-t%'` hoặc field note/memo chứa `E2E_AI_<T_ID>`). Cleanup chỉ xóa records có marker này, KHÔNG xóa data không có marker.
 
 **KHÔNG xóa data không có marker** — `DELETE FROM table WHERE ip=...` mà không lọc theo AI_KEY = xóa data production. Vi phạm nghiêm trọng.
