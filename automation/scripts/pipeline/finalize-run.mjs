@@ -163,7 +163,7 @@ async function writeReport(args, state, movedSeeds) {
 function optionalWriteResults(state, args) {
   if (args.noSheetDoc || !state?.flags) return [];
   const done = [];
-  const healed = 0;
+  const healed = (state.healed_tc || []).length;
   if (state.flags.result_sheet) {
     const sheetArgs = [
       'scripts/write-results-to-sheet.mjs',

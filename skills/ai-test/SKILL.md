@@ -10,7 +10,7 @@ argument-hint: "<url|file|sheet|description> --project=<name> [--target=<url>] [
 > 1. File này (1 Read duy nhất, offset=1 limit=2000)
 > 2. `Read skills/ai-test/rules/RULES.md` (Bước 0 — bắt buộc)
 >
-> Sau khi đọc RULES.md, xuất ngay: `✅ RULES đã đọc | Nắm: #1 #2 ... #17`
+> Sau khi đọc RULES.md, xuất ngay: `✅ RULES đã đọc | Nắm: #0 #1 #2 ... #17`
 > Không xuất dòng này = chưa đọc rules = vi phạm INC-04.
 
 ## Paths — TỰ SUY RA, KHÔNG hardcode
@@ -51,7 +51,7 @@ Read <APP_ROOT>/skills/ai-test/rules/RULES.md
 
 Sau khi đọc, xuất ngay dòng self-check trước khi tiếp tục:
 ```
-✅ RULES đã đọc | Nắm: #1 #2 #3 #4 #5 #6 #7 #8 #9 #10 #11 #12 #13 #14 #15 #16 #17
+✅ RULES đã đọc | Nắm: #0 #1 #2 #3 #4 #5 #6 #7 #8 #9 #10 #11 #12 #13 #14 #15 #16 #17
 ```
 
 ---
@@ -60,7 +60,7 @@ Sau khi đọc, xuất ngay dòng self-check trước khi tiếp tục:
 
 > Mục tiêu: main context mỏng. Script xử lý việc deterministic; AI/agent chỉ làm AUTHOR, HEAL, và phân tích lỗi cần suy luận.
 > Sau mỗi pha `done` hoặc `skipped`, trạng thái nằm trong `projects/<name>/.run-checklist.md` + `.run-state.json`; không giữ reasoning/log dài trong context. Nếu phiên đã dài, dùng `/clear` hoặc mở phiên mới rồi resume bằng 2 file này.
-> Với DEV/người dùng, vẫn chỉ có **một entrypoint**: Claude Code dùng `/ai-test ...` hoặc `/ai-test-i`; Codex dùng prompt "đọc SKILL.md và chạy pipeline cho ...". Các lệnh `prep-run/finalize-run/checklist` là nội bộ pipeline, KHÔNG yêu cầu dev chạy tay.
+> Với DEV/người dùng, vẫn chỉ có **một entrypoint**: Claude Code dùng `/ai-test ...` hoặc `/ai-test-i`; Codex ưu tiên `/ai-test ...` khi đã có đủ input/project/flags (nếu thiếu thì hỏi chat trước). Các lệnh `prep-run/finalize-run/checklist` là nội bộ pipeline, KHÔNG yêu cầu dev chạy tay.
 
 ### Pha 1: PREP
 
@@ -83,6 +83,22 @@ node scripts/pipeline/prep-run.mjs "<input>" --project="<name>" --target="<base_
 Nếu output có `env_check.ok=false` thì dừng và hướng dẫn chạy `./setup.sh` hoặc bật Docker. Nếu `source_meta_status="same"` và `should_author=false`, bỏ qua AUTHOR và chạy lại test file cũ.
 
 Flags hợp lệ: `--project`, `--target`, `--max-heal`, `--interactive`, `--rerun`, `--only`, `--fast`, `--live`, `--sheet`, `--sheet-tab`, `--doc`, `--screens`, `--kg`, `--kg-rebuild`, `--note`.
+
+### Codex compatibility
+
+Chỉ áp dụng khi AI tool hiện tại là **Codex**. **Claude Code bỏ qua mục này** và chạy như trước.
+
+- Nếu state/arguments có `--live`, lệnh RUN phải được thực thi ngoài network sandbox
+  (`sandbox_permissions=require_escalated` trong `exec_command`, sau khi user approve). Lý do: noVNC publish
+  `http://localhost:6080/vnc.html` bằng Docker `-p`, nhưng Codex sandbox có thể dùng `--unshare-net`, làm
+  `localhost` của browser host không thấy port được publish trong sandbox. Không đổi port để xử lý lỗi này;
+  port đúng của repo gốc là `6080`. Nếu user không approve chạy ngoài sandbox, vẫn có thể chạy live để lấy
+  video artifact nhưng phải báo trước rằng realtime viewer có thể không mở được từ browser host.
+- Nếu cần mở server xem bằng browser host (`scripts/show-report.sh`, `scripts/start-dashboard.sh`) trong
+  Codex, cũng chạy ngoài network sandbox vì các lệnh này publish `localhost` port (`9323`, `8765`).
+- Nếu input/output dùng URL bên ngoài cần host network từ script Node (`Google Sheet`, `Google Doc`,
+  Confluence/Atlassian), Codex có thể cần `sandbox_permissions=require_escalated` khi command bị lỗi DNS/network.
+  Nếu command fail vì network sandbox, xin approval và chạy lại cùng command ngoài sandbox.
 
 ### Pha 2: AUTHOR
 
@@ -228,7 +244,7 @@ User từ chối → đánh dấu T là BLOCKED.
 
 ## Liên quan
 
-- `skills/ai-test/rules/RULES.md` — 16 nguyên tắc bất biến (BẮT BUỘC đọc ở Bước 0)
+- `skills/ai-test/rules/RULES.md` — 18 nguyên tắc bất biến (BẮT BUỘC đọc ở Bước 0)
 - `skills/ai-test/steps/STEP-3b-seed.md` — quy tắc seed data chi tiết
 - `skills/ai-test/steps/STEP-report.md` — template AI_REPORT.md đầy đủ
 - `skills/ai-test/steps/STEP-7d-sheet.md` — ghi kết quả vào Google Sheet/Doc

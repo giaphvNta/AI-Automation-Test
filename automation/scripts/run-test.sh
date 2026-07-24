@@ -63,6 +63,11 @@ fi
 echo "[run-test] 🐳 Project: '$PROJECT_NAME' | Run ID: $RUN_ID"
 [ -n "$TEST_FAST" ] && echo "[run-test] ⚡ Fast mode ON (no video/trace)"
 [ -n "$TEST_LIVE" ] && echo "[run-test] 🖥️  Live mode ON — mở http://localhost:6080/vnc.html để xem"
+if [ -n "$TEST_LIVE" ] && tr '\0' ' ' < /proc/1/cmdline 2>/dev/null | grep -q -- '--unshare-net'; then
+  echo "[run-test] ⚠️  Codex/network sandbox detected (--unshare-net)."
+  echo "[run-test] ⚠️  noVNC vẫn chạy trong container, nhưng http://localhost:6080/vnc.html có thể không truy cập được từ browser host."
+  echo "[run-test] ⚠️  Với Codex + --live, hãy chạy lệnh này outside sandbox / sandbox_permissions=require_escalated để port 6080 publish ra host."
+fi
 
 # Cài deps chỉ khi package-lock.json thay đổi, không cài lại mỗi lần chạy test
 # shellcheck disable=SC2086

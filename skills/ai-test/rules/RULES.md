@@ -1,15 +1,15 @@
-# RULES — Nguyên tắc bất biến (16 rules)
+# RULES — Nguyên tắc bất biến (18 rules)
 
 > **Bước 0 — BẮT BUỘC:** Đọc file này NGAY SAU SKILL.md. Sau khi đọc xong, xuất dòng self-check:
 > ```
-> ✅ RULES đã đọc | Nắm: #1 #2 #3 #4 #5 #6 #7 #8 #9 #10 #11 #12 #13 #14 #15 #16 #17
+> ✅ RULES đã đọc | Nắm: #0 #1 #2 #3 #4 #5 #6 #7 #8 #9 #10 #11 #12 #13 #14 #15 #16 #17
 > ```
 > Nếu không có dòng self-check này → coi như chưa đọc rules → vi phạm INC-04.
 
 ---
 
-1. **Auto mode default** — không hỏi giữa các bước. Làm từ đầu đến cuối.
 0. **AI_REPORT.md nằm trong run directory** — `projects/<name>/test-results/runs/<run-id>/AI_REPORT.md`. TUYỆT ĐỐI KHÔNG ghi vào path nào khác.
+1. **Auto mode default** — không hỏi giữa các bước. Làm từ đầu đến cuối.
 2. **`--interactive`** — bật confirm trước khi chạy test thật.
 3. **CWD bắt buộc** `$APP_ROOT/automation/`.
 4. **`--project=<name>` BẮT BUỘC** — không tự đoán, hỏi nếu thiếu.

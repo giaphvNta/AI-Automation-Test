@@ -780,13 +780,15 @@ node scripts/write-results-to-doc.mjs \
 │
 ├── skills/
 │   ├── ai-test/
-│   │   ├── SKILL.md                 ← File chính (422 dòng) — AI luôn đọc toàn bộ
+│   │   ├── SKILL.md                 ← File chính — AI luôn đọc toàn bộ
 │   │   ├── rules/
-│   │   │   └── RULES.md             ← 16 nguyên tắc bất biến (Bước 0 — AI luôn đọc)
+│   │   │   └── RULES.md             ← 18 nguyên tắc bất biến (Bước 0 — AI luôn đọc)
 │   │   └── steps/
 │   │       ├── STEP-3b-seed.md      ← Quy tắc seed data chi tiết
 │   │       ├── STEP-7d-sheet.md     ← Ghi kết quả vào Sheet/Doc
-│   │       └── STEP-report.md       ← Template AI_REPORT.md đầy đủ
+│   │       ├── STEP-report.md       ← Template AI_REPORT.md đầy đủ
+│   │       ├── STEP-screens.md      ← Cơ chế SCREENS.md (knowledge map màn hình, --screens)
+│   │       └── STEP-knowledge-graph.md ← Knowledge Graph từ source (--kg)
 │   └── ai-test-i/
 │       └── SKILL.md                 ← Front-end picker: thu thập flag rồi gọi lại ai-test
 │
@@ -799,22 +801,31 @@ node scripts/write-results-to-doc.mjs \
     ├── dashboard.html               ← Dashboard real-time (mở qua http://localhost:8765)
     │
     ├── scripts/
+    │   ├── pipeline/                ← Pha deterministic: prep-run / finalize-run / checklist
+    │   ├── heal/                    ← Merge heal run + extract failures
+    │   ├── report/                  ← gen-report.mjs (skeleton AI_REPORT.md)
+    │   ├── knowledge/               ← Knowledge Graph builder (--kg) + extractors
     │   ├── run-test.sh              ← Wrapper chạy test (normal / fast / live)
     │   ├── live-entrypoint.sh       ← Khởi VNC bên trong container (dùng khi --live)
     │   ├── show-report.sh           ← Mở HTML report (tự chọn run mới nhất theo mtime)
-    │   ├── convert-videos.sh        ← Bước 6b: webm→mp4 song song + full-session đúng thứ tự
+    │   ├── convert-videos.sh        ← Convert webm→mp4 song song + full-session đúng thứ tự
     │   ├── lint-test.sh             ← Gate chặn fake assertion / test.skip (Rule #15)
     │   ├── start-dashboard.sh       ← Khởi HTTP server cho dashboard
     │   ├── update-status.sh         ← Ghi trạng thái bước hiện tại cho dashboard
+    │   ├── check-env.mjs            ← Check env container/deps (prep dùng)
+    │   ├── check-session-freshness.mjs ← Check session/auth còn tươi không
+    │   ├── classify-difficulty.mjs  ← Phân loại độ khó input
+    │   ├── measure-tokens.mjs       ← Đo token knowledge graph
     │   ├── load-google-sheet.mjs    ← Đọc Google Sheet
     │   ├── load-google-doc.mjs      ← Đọc Google Doc 
     │   ├── write-results-to-sheet.mjs ← Ghi kết quả về Google Sheet 
     │   └── write-results-to-doc.mjs   ← Ghi kết quả vào Google Doc 
     │
-    ├── .claude/agents/              ← 3 Test Agents
+    ├── .claude/agents/              ← 4 Test Agents
     │   ├── playwright-test-planner.md
     │   ├── playwright-test-generator.md
-    │   └── playwright-test-healer.md
+    │   ├── playwright-test-healer.md
+    │   └── report-writer.md
     │
     ├── seeds/                      ← Seed scripts dùng chung (AI move vào đây sau test)
     │   └── <tên-project>/
@@ -822,7 +833,7 @@ node scripts/write-results-to-doc.mjs \
     │
     └── projects/                   ← DỮ LIỆU TEST (edit ở đây)
         └── <tên-project>/
-            ├── .env                ← Credentials + RESULTS_SHEET_URL (gitignore)
+            ├── .env                ← Credentials (gitignore; kết quả Sheet/Doc truyền qua flag --sheet/--doc)
             ├── specs/
             │   ├── <slug>.md       ← Plan markdown (AI sinh, slug = tên định danh duy nhất)
             │   └── .source-meta/
@@ -901,6 +912,9 @@ docker compose build playwright
 → Trong trang VNC: nhấn nút **Connect** (góc trên phải) trước khi test bắt đầu.  
 → Nếu vào đúng lúc nhưng màn đen: VNC đang khởi, chờ 1–2s rồi nhấn Connect lại.  
 → Đảm bảo port 6080 không bị firewall Windows chặn.
+→ Nếu chạy trong Codex và mở đúng lúc vẫn không thấy, command có thể đang ở network sandbox
+(`--unshare-net`). Chạy RUN phase outside sandbox / `sandbox_permissions=require_escalated` để Docker
+publish port `6080` ra browser host. Claude Code bình thường không bị ảnh hưởng bởi nhánh này.
 
 ### Google Sheet: authentication error
 
