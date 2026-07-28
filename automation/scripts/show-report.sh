@@ -37,6 +37,11 @@ echo "[show-report] 🌐 Mở trình duyệt: http://localhost:9323"
 echo "[show-report] ⚠️  LƯU Ý: report HTML này là ẢNH CHỤP LẦN CHẠY GỐC — KHÔNG cập nhật sau heal."
 echo "[show-report]     Case đã heal-pass vẫn hiện FAILED + video trước heal ở đây."
 echo "[show-report]     👉 Kết quả & video CHÍNH THỨC (đã merge heal): xem AI_REPORT.md trong run dir."
+if tr '\0' ' ' < /proc/1/cmdline 2>/dev/null | grep -q -- '--unshare-net'; then
+  echo "[show-report] ⚠️  Codex/network sandbox detected (--unshare-net)."
+  echo "[show-report] ⚠️  http://localhost:9323 có thể không truy cập được từ browser host."
+  echo "[show-report] ⚠️  Trong Codex, chạy lệnh này outside sandbox / sandbox_permissions=require_escalated để publish port ra host."
+fi
 echo ""
 
 cd "$AUTOMATION_DIR"

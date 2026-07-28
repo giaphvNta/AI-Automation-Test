@@ -10,22 +10,28 @@ argument-hint: "<url|file|sheet|description> --project=<name> [--target=<url>] [
 > 1. File này (1 Read duy nhất, offset=1 limit=2000)
 > 2. `Read skills/ai-test/rules/RULES.md` (Bước 0 — bắt buộc)
 >
-> Sau khi đọc RULES.md, xuất ngay: `✅ RULES đã đọc | Nắm: #1 #2 ... #17`
+> Sau khi đọc RULES.md, xuất ngay: `✅ RULES đã đọc | Nắm: #0 #1 #2 ... #17`
 > Không xuất dòng này = chưa đọc rules = vi phạm INC-04.
 
 ## Paths — TỰ SUY RA, KHÔNG hardcode
 
 > ⚠️ Tool có thể được clone ở path bất kỳ, trên máy bất kỳ (Linux/WSL/macOS).
-> **APP_ROOT = đường dẫn bạn vừa Read file SKILL.md này, bỏ đuôi `/skills/ai-test/SKILL.md`.**
+> **Nếu đang đọc skill từ `~/.codex/skills/...` thì KHÔNG suy APP_ROOT từ path đó.**
+> Trước tiên chạy `cat ~/.ai-automation-test-root`; nếu file tồn tại và path có thư mục `automation/`
+> thì **APP_ROOT = nội dung file marker này**.
+> Chỉ khi không có marker, **APP_ROOT = đường dẫn bạn vừa Read file SKILL.md này, bỏ đuôi `/skills/ai-test/SKILL.md`.**
 > Ví dụ đọc `/Users/an/ai-automation-test/skills/ai-test/SKILL.md` → `APP_ROOT=/Users/an/ai-automation-test`.
-> Đặt biến 1 lần ở Bước 2 rồi dùng xuyên suốt:
+> Đặt biến 1 lần trước Pha 1 rồi dùng xuyên suốt:
 
 ```
-APP_ROOT     = <thư mục chứa repo — tự suy từ path đọc SKILL.md>
+APP_ROOT     = <cat ~/.ai-automation-test-root nếu có; fallback suy từ path đọc SKILL.md>
 HUB          = $APP_ROOT/automation
 PROJECTS     = $APP_ROOT/automation/projects
 SERVICE_AUTH = $APP_ROOT/service-auth.json   (Google Sheets - optional)
 ```
+
+Nếu `$APP_ROOT/automation` không tồn tại, DỪNG và kiểm tra marker/setup; KHÔNG tự dò sang repo
+automation khác hoặc project app hiện tại vì sẽ chạy nhầm hub.
 
 Mọi lệnh bash chạy sau `cd "$APP_ROOT/automation"` → dùng path **tương đối** (`scripts/...`, `projects/...`).
 Script (.sh/.mjs) đều tự định vị nên gọi bằng path tương đối luôn đúng.
@@ -34,9 +40,11 @@ Script (.sh/.mjs) đều tự định vị nên gọi bằng path tương đối
 
 ```bash
 # Chạy sau khi đã cd "$APP_ROOT/automation"
-bash scripts/update-status.sh <step> <key> "<project>" "<msg>" [heal] [mode] [status]
+bash scripts/update-status.sh <step> <key> "<project>" "<msg>" [heal] [mode] [status] [--run-id=<id>] [--note=<text>]
 ```
 Dashboard: `http://localhost:8765`
+
+`update-status.sh` cũng tự update `.run-checklist.md/.json` theo pha tương ứng (best-effort). Vì vậy khi kết thúc AUTHOR/RUN+HEAL, ưu tiên gọi `update-status.sh ... done --note=...` thay vì gọi riêng `checklist.mjs mark`. Riêng `finalize done` do `finalize-run.mjs` mark run-level rồi reset project-level về `idle`, nên lệnh status cuối chỉ dùng để đóng dashboard.
 
 ---
 
@@ -49,420 +57,181 @@ Read <APP_ROOT>/skills/ai-test/rules/RULES.md
 
 Sau khi đọc, xuất ngay dòng self-check trước khi tiếp tục:
 ```
-✅ RULES đã đọc | Nắm: #1 #2 #3 #4 #5 #6 #7 #8 #9 #10 #11 #12 #13 #14 #15 #16 #17
+✅ RULES đã đọc | Nắm: #0 #1 #2 #3 #4 #5 #6 #7 #8 #9 #10 #11 #12 #13 #14 #15 #16 #17
 ```
 
 ---
 
-## Bước 1: Parse arguments
+## Pipeline 4 Pha
 
-> 📊 `bash scripts/update-status.sh 1 s1 "<name>" "Parsing arguments..." 0 normal`
+> Mục tiêu: main context mỏng. Script xử lý việc deterministic; AI/agent chỉ làm AUTHOR, HEAL, và phân tích lỗi cần suy luận.
+> Sau mỗi pha `done` hoặc `skipped`, trạng thái nằm trong `projects/<name>/.run-checklist.md` + `.run-state.json`; không giữ reasoning/log dài trong context. Nếu phiên đã dài, dùng `/clear` hoặc mở phiên mới rồi resume bằng 2 file này.
+> Với DEV/người dùng, vẫn chỉ có **một entrypoint**: Claude Code dùng `/ai-test ...` hoặc `/ai-test-i`; Codex ưu tiên `/ai-test ...` khi đã có đủ input/project/flags (nếu thiếu thì hỏi chat trước). Các lệnh `prep-run/finalize-run/checklist` là nội bộ pipeline, KHÔNG yêu cầu dev chạy tay.
 
-Flags:
-- `--project=<name>` — BẮT BUỘC. Thiếu → HỎI, không đoán.
-- `--target=<base_url>` — URL app cần test
-- `--max-heal=<n>` — default 3
-- `--interactive` — default OFF
-- `--rerun` — chạy lại test cũ, bỏ qua Bước 1b
-- `--only=<test>` — chạy 1 test
-- `--fast` — **set `TEST_FAST=1`** (tắt video/trace, 4 workers, skip heal, report 3 dòng)
-- `--live` — **set `TEST_LIVE=1`** (headed mode + VNC tại http://localhost:6080/vnc.html). **CHỈ dùng khi user yêu cầu xem trực tiếp** — live có slowMo 600ms + countdown 12s → chậm hơn nhiều. Autonomous run mặc định headless normal.
-- `--sheet=<url>` — ghi kết quả vào Google Sheet sau test (Bước 7d). Cần `service-auth.json`.
-- `--sheet-tab=<name>` — tên tab (vd: `--sheet-tab="Test Cases"`). Auto-detect nếu bỏ qua.
-- `--doc=<url>` — ghi kết quả vào Google Doc sau test (Bước 7d). Cần `service-auth.json`.
-- `--screens` — **bật cơ chế SCREENS.md** (knowledge map màn hình): tái dùng URL/selector/flow + data recipe đã lưu để viết test nhanh hơn, chính xác hơn, ít heal hơn. Lần đầu chưa có file → crawl 1 lần sinh ra. → **Đọc `skills/ai-test/steps/STEP-screens.md`**. Không có flag → bỏ qua, giữ hành vi cũ.
-- `--kg` — **bật Knowledge Graph** (index endpoint/route từ source bằng Tree-sitter): agent query `projects/<name>/knowledge/api.json` để biết method/path/`file:line` thay vì grep source → giảm token pha authoring. Chưa có file → build 1 lần (xem Bước 5). → **Đọc `skills/ai-test/steps/STEP-knowledge-graph.md`**. Không có flag → bỏ qua, giữ hành vi cũ.
-- `--kg-rebuild` — chỉ có tác dụng khi đi kèm `--kg`: **ép build lại** Knowledge Graph trước khi dùng (khi source app đã đổi). Không có flag này → AI CHỈ cảnh báo nếu graph cũ, KHÔNG tự rebuild (dev tự quyết).
-- `--note="<text>"` — ghi chú/hướng dẫn thêm cho lần chạy này. AI PHẢI đọc và lưu ý ở Bước 3b/4/5/6 (seed, plan, generate, verify). Dùng cho **bất kỳ hướng dẫn thêm nào tùy project** — ví dụ (không giới hạn): công cụ/URL phụ để verify (mail-catcher, DB admin, hay service khác — URL/port tùy project), account/role cần dùng, màn cần bỏ qua, thứ tự chạy, quirk môi trường, v.v. ⚠️ **Ranh giới (theo RULES):** note CHỈ hướng dẫn *cách tương tác/verify*, và: (a) KHÔNG đặt expected/threshold ghi đè spec (spec-first + Seed #0); (b) KHÔNG chứa password/token/key (#16); (c) KHÔNG dùng để skip/che TC đáng chạy — TC dính third-party vẫn theo #15 (BLOCKED); (d) truy cập URL phụ (mail/DB viewer…) qua **container/HTTP/dbQuery**, KHÔNG mở browser trên host (#5). Ghi chú **ổn định theo project** nên để trong `SCREENS.md` mục "Môi trường & công cụ" thay vì gõ lại mỗi lần.
+### Pha 1: PREP
 
-Input types:
-| Dạng | Nhận diện | Loader |
-|---|---|---|
-| Google Sheet | `docs.google.com/spreadsheets` | `scripts/load-google-sheet.mjs` + `service-auth.json` |
-| Google Doc | `docs.google.com/document` | `scripts/load-google-doc.mjs` + `service-auth.json` |
-| Confluence | `*.atlassian.net/wiki` | `scripts/load-confluence.mjs` + `CONFLUENCE_EMAIL/TOKEN` |
-| URL khác | `http(s)://` | WebFetch |
-| File | Có `/` hoặc đuôi `.pdf/.md/.xlsx/.csv` | Read |
-| Mô tả | Còn lại | Trực tiếp |
-
-### Bước 1b: Kiểm tra thay đổi spec so với lần trước
-
-> 📊 `bash scripts/update-status.sh 1 s1b "<name>" "Detecting spec changes..." 0 normal`
-
-> Áp dụng mọi project và mọi mode. Ngoại lệ: `--rerun` → bỏ qua toàn bộ bước 1b.
-
-Metadata: `projects/<name>/specs/.source-meta/<slug>.json`
+Gom các bước cũ 1 + 1b + 2 + 3 + phân loại độ khó.
 
 ```bash
-# Hash nội dung spec hiện tại
-# Google Sheet: BẮT BUỘC --strip-result-cols khi hash
-CONTENT=$(node scripts/load-google-sheet.mjs "<url>" --sheet="<tab>" --format=markdown --strip-result-cols 2>/dev/null)
-CURRENT_HASH=$(echo "$CONTENT" | sha256sum | cut -d' ' -f1)
-
-# Lấy hash lần trước
-STORED_HASH=$(python3 -c "
-import json,sys
-try:
-  d=json.load(open('projects/<name>/specs/.source-meta/<slug>.json'))
-  print(d.get('content_hash',''))
-except: print('')
-" 2>/dev/null)
+cd "$APP_ROOT/automation"
+bash scripts/update-status.sh 1 prep "<name>" "Preparing run..." 0 normal
+node scripts/pipeline/prep-run.mjs "<input>" --project="<name>" --target="<base_url>" [flags...]
 ```
 
-| Tình huống | Hành động |
-|---|---|
-| Lần đầu (chưa có meta) | Chạy đầy đủ Bước 3–7 |
-| Hash **giống** | Bỏ qua Bước 3–5, chạy thẳng Bước 6 với test file cũ |
-| Hash **khác** | Cập nhật ngay, chạy lại Bước 3–5 → 6 |
-| `--rerun` | Bỏ qua check, chạy thẳng test file cũ |
+`prep-run.mjs` tự:
+- parse flag, nhận diện input, sinh slug, load spec vào `projects/<name>/specs/<slug>.md`;
+- check hash source-meta, quyết định `should_author`;
+- chạy `check-env.mjs`;
+- chạy `classify-difficulty.mjs` và ghi `<slug>.difficulty.json`;
+- ghi state gọn vào `projects/<name>/.run-state.json`;
+- ghi checklist gọn vào `projects/<name>/.run-checklist.md`.
 
-Khi phát hiện thay đổi → báo ngắn rồi tự cập nhật:
-```
-⚠️ Test case đã thay đổi (run cũ: <run-id>). Đang cập nhật test plan + code...
-```
+Nếu output có `env_check.ok=false` thì dừng và hướng dẫn chạy `./setup.sh` hoặc bật Docker. Nếu `source_meta_status="same"` và `should_author=false`, bỏ qua AUTHOR và chạy lại test file cũ.
 
-**Sheet là source of truth:** Khi sheet thay đổi, mọi quyết định trong memory về TC cụ thể bị override — sheet thắng.
+Flags hợp lệ: `--project`, `--target`, `--max-heal`, `--interactive`, `--rerun`, `--only`, `--fast`, `--live`, `--sheet`, `--sheet-tab`, `--doc`, `--screens`, `--kg`, `--kg-rebuild`, `--note`.
 
----
+### Codex compatibility
 
-## Bước 2: Switch context
+Chỉ áp dụng khi AI tool hiện tại là **Codex**. **Claude Code bỏ qua mục này** và chạy như trước.
 
-> 📊 `bash scripts/update-status.sh 2 s2 "<name>" "Switching context..." 0 normal`
+- Nếu state/arguments có `--live`, lệnh RUN phải được thực thi ngoài network sandbox
+  (`sandbox_permissions=require_escalated` trong `exec_command`, sau khi user approve). Lý do: noVNC publish
+  `http://localhost:6080/vnc.html` bằng Docker `-p`, nhưng Codex sandbox có thể dùng `--unshare-net`, làm
+  `localhost` của browser host không thấy port được publish trong sandbox. Không đổi port để xử lý lỗi này;
+  port đúng của repo gốc là `6080`. Nếu user không approve chạy ngoài sandbox, vẫn có thể chạy live để lấy
+  video artifact nhưng phải báo trước rằng realtime viewer có thể không mở được từ browser host.
+- Nếu cần mở server xem bằng browser host (`scripts/show-report.sh`, `scripts/start-dashboard.sh`) trong
+  Codex, cũng chạy ngoài network sandbox vì các lệnh này publish `localhost` port (`9323`, `8765`).
+- Nếu input/output dùng URL bên ngoài cần host network từ script Node (`Google Sheet`, `Google Doc`,
+  Confluence/Atlassian), Codex có thể cần `sandbox_permissions=require_escalated` khi command bị lỗi DNS/network.
+  Nếu command fail vì network sandbox, xin approval và chạy lại cùng command ngoài sandbox.
+
+### Pha 2: AUTHOR
+
+Gom các bước cũ 3b + 4 + 5. Chỉ chạy khi `.run-state.json.should_author=true`.
 
 ```bash
-cd $APP_ROOT/automation
-export TEST_PROJECT=<name>
+bash scripts/update-status.sh 2 author "<name>" "Authoring tests..." 0 normal
 ```
 
-Check nhanh: Docker daemon, `automation/.claude/agents/playwright-test-*.md` có đủ 3 file? Thiếu → hướng dẫn chạy `./setup.sh`.
+Nguồn đọc bắt buộc:
+- `projects/<name>/.run-state.json`
+- `spec_file` trong state
+- `difficulty_file` trong state
+- `SCREENS.md` hoặc Knowledge Graph chỉ khi flag tương ứng bật
 
----
+Quy tắc routing:
+- Sheet/spec đã có T chi tiết → spec chính là plan, không gọi agent.
+- `simple` trong difficulty → tự viết hoặc dùng SCREENS; tránh agent nếu selector rõ.
+- `medium` → dùng SCREENS/KG trước, agent chỉ khám phá phần UI thiếu.
+- `hard` → cần khám phá DOM thật, dùng Agent `playwright-test-generator` (xem "Cách gọi agent tuỳ
+  biến" dưới); hỏi Advisor khi stuck/trước khi kết luận app bug.
+- `blocked` captcha/third-party → mock/test key hoặc đánh BLOCKED theo Rule #15; không đốt heal loop.
 
-## Bước 3: Đọc input + trích scenarios
+**Cách gọi agent tuỳ biến (generator/planner/healer/report-writer):**
+Nếu tool hỗ trợ custom sub-agent kiểu Claude Code, gọi THẲNG tên agent làm `subagent_type`
+(vd `subagent_type: "playwright-test-generator"`). Claude Code tự áp `model`/`tools`/persona từ
+frontmatter `.claude/agents/*.md`.
 
-> 📊 `bash scripts/update-status.sh 3 s3 "<name>" "Loading input + extracting scenarios..." 0 normal`
+Nếu chạy trên Codex hoặc môi trường không có custom sub-agent registry, dùng cùng persona file nhưng
+thực thi inline hoặc bằng agent tổng quát nếu tool có hỗ trợ. Bắt buộc đọc file persona trước khi làm,
+ví dụ:
+> "Đọc `automation/.claude/agents/playwright-test-generator.md` — đây LÀ vai trò và luật của bạn
+> cho task này. Sau khi đọc, thực hiện: <task cụ thể>. Tuân thủ đúng format output đã định nghĩa
+> trong file đó."
 
-### Quy tắc sinh slug
+**Quy tắc delegate (bắt buộc):**
+- Trước khi gọi bất kỳ Agent nào, orchestrator phải báo cho user MỘT dòng: "Delegate <task> cho <tên agent> vì <lý do>". Không gọi Agent im lặng.
+- Không tự escalate lên model/agent nặng hơn mức difficulty gợi ý. Nếu difficulty là simple/medium mà muốn dùng agent khám phá DOM (playwright-test-generator) hoặc model/effort cao hơn, phải xin phép user trước, nêu rõ mục đích + vì sao cần resource nặng hơn. Chưa được phép thì giữ ở mức nhẹ hoặc hỏi user.
 
-| Input | Slug |
-|---|---|
-| File local | Tên file không extension: `login-spec.md` → `login-spec` |
-| Google Sheet (không tab) | `sheet_<8-ký-tự-đầu-id>`: `sheet_1SopqsJc` |
-| Google Sheet + tab | `sheet_<8-ký-tự-đầu-id>_<tab-slug>`: `sheet_1SopqsJc_tng-30` |
-| Google Doc | `doc_<8-ký-tự-đầu-docId>` |
-| Confluence | `confluence_<pageId>` |
-| URL khác | Slug hóa domain+path cuối, cắt 40 ký tự |
-| Mô tả text | 4-5 từ đầu slug hóa |
+Seed data: đọc `skills/ai-test/steps/STEP-3b-seed.md` chỉ khi T cần data thiếu. Dùng AI_KEY marker; không hỏi user trừ khi bị chặn bởi third-party/plugin.
 
-Tab slug: lowercase, space/special → `-`, bỏ dấu tiếng Việt.
+Khi AUTHOR xong, update status/checklist rồi có thể xóa context dài:
+```bash
+bash scripts/update-status.sh 2 author "<name>" "Author done" 0 normal done --note="test_file=<path>"
+```
+
+Quy tắc test code giữ nguyên:
+- T ID khớp 1-1 với spec/sheet (`T-31: ...` không đánh số lại).
+- Expected/assertion lấy nguyên văn từ spec/sheet, không lấy từ app/source.
+- Selector ưu tiên `getByRole` > `getByLabel` > `getByText` > CSS.
+- Không `waitForTimeout`, không fake assertion, không `test.skip/fixme/fail` để che bug.
+- Mỗi T phải có screenshot evidence sau assertion chính.
+
+### Pha 3: RUN+HEAL
+
+Gom bước cũ 6. Main chỉ chạy script và gọi healer khi fail.
 
 ```bash
-slugify() {
-  echo "$1" | tr '[:upper:]' '[:lower:]' \
-    | sed 's/[àáạảãâầấậẩẫăằắặẳẵ]/a/g;s/[èéẹẻẽêềếệểễ]/e/g' \
-    | sed 's/[ìíịỉĩ]/i/g;s/[òóọỏõôồốộổỗơờớợởỡ]/o/g' \
-    | sed 's/[ùúụủũưừứựửữ]/u/g;s/[ỳýỵỷỹ]/y/g;s/đ/d/g' \
-    | sed 's/[^a-z0-9]/-/g;s/-\+/-/g;s/^-\|-$//g'
-}
+cd "$APP_ROOT/automation"
+bash scripts/update-status.sh 3 run "<name>" "Running tests..." 0 normal
+RUN_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+STATE_JSON="projects/<name>/.run-state.json"
+SPEC_FILE="$(node -e 'const s=require("./"+process.argv[1]); console.log(s.test_file)' "$STATE_JSON")" \
+TEST_LIVE="$(node -e 'const s=require("./"+process.argv[1]); process.stdout.write((s.mode==="live"||s.flags?.live)?"1":"")' "$STATE_JSON")" \
+./scripts/run-test.sh "<name>" [--grep "<only>"]
 ```
 
-**Google Sheet:**
+Đọc `Run ID:` từ output wrapper, không tự đoán. `run-test.sh` giữ guard Rule #15 và #17.
+
+Nếu fail và không phải `--fast`:
+1. `node scripts/heal/extract-failures.mjs <name> <run-id>`
+2. Gọi Agent `subagent_type: "playwright-test-healer"` (xem "Cách gọi agent tuỳ biến" ở Pha 2 —
+   lỗi `Agent type not found` thì dùng fallback `general-purpose` ở đó). Prompt chỉ gồm: `spec_file`,
+   `test_file`, lỗi đã extract, base URL, và note cần thiết — KHÔNG paste toàn bộ spec/DOM.
+   Healer kết thúc bằng JSON `{tc_fixed, tc_app_bug, root_cause_summary, patched_files}` — luôn chạy
+   trong context RIÊNG của Agent call này, không vào cache của main.
+3. Rerun batch `tc_fixed` bằng HEAL_RUN_ID riêng:
+   `TEST_RUN_ID="${RUN_ID}_h${heal_count}" SPEC_FILE=... ./scripts/run-test.sh <name> --grep "T-7:|T-14:"`
+4. Merge:
+   `node scripts/heal/merge-heal.mjs <name> "$RUN_ID" "$HEAL_RUN_ID"`
+
+Không dùng `RUN_ID` gốc cho heal rerun. Không patch expected value để làm test xanh.
+
+Khi RUN+HEAL xong, update status/checklist:
 ```bash
-SHEET_ID=$(echo '<url>' | grep -oP '(?<=/d/)[^/]+')
-SLUG="sheet_${SHEET_ID:0:8}${TAB_SLUG:+_$TAB_SLUG}"
-node scripts/load-google-sheet.mjs "<url>" --sheet="<tab>" --format=markdown 2>/dev/null \
-  > "projects/<name>/specs/${SLUG}.md"
+bash scripts/update-status.sh 3 run "<name>" "Run done" 0 normal done --run-id="$RUN_ID" --note="results.json ready"
 ```
 
-> ⚠️ Spec file tạo bằng shell redirect. Nếu Bước 4 dùng Write tool → PHẢI Read file trước.
+### Pha 4: FINALIZE
 
-**Google Doc:**
-```bash
-node scripts/load-google-doc.mjs "<url>" --out="projects/<name>/specs/${SLUG}.md"
-# ⚠️ Dùng --out=<path> (có dấu =), không dùng dạng space
-```
-
-**File local / URL:** đọc trực tiếp, slug từ tên file hoặc domain.
-
-Nếu `<slug>.md` đã tồn tại → lần chạy lại, chỉ update nội dung nếu hash thay đổi.
-
----
-
-## Bước 3b: Kiểm tra data thiếu → tự động xử lý
-
-> ⚠️ **BẮT BUỘC — chạy NGAY đầu bước** (cập nhật dashboard, hay bị sót): `bash scripts/update-status.sh 3 s3b "<name>" "Checking and seeding test data..." 0 <mode>`
-
-→ **Đọc `skills/ai-test/steps/STEP-3b-seed.md`** để biết quy trình đầy đủ.
-
-**Tóm tắt:** Rà từng scenario, xác định data thiếu. Tự seed hoặc fake — KHÔNG hỏi user (trừ case bị block bởi third-party plugin → Rule #15 trong RULES.md). Kiểm tra schema trước khi INSERT. Dùng AI_KEY marker cho mọi seed record. Ghi 1 dòng log vào report nếu có tạo data. Đi thẳng Bước 4.
-
-**Nếu có `--screens`:** ưu tiên "data recipe" trong `projects/<name>/SCREENS.md` (thứ tự API > UI flow > DB-chỉ-local). DB trực tiếp chỉ dùng khi reachable (local); dev/stg không expose DB → tạo data qua API/UI theo recipe. Chưa có recipe → tạo rồi ghi ngược vào SCREENS.md.
-
----
-
-## Bước 4: Sinh test plan
-
-> ⚠️ **BẮT BUỘC — chạy NGAY đầu bước** (cập nhật dashboard, hay bị sót): `bash scripts/update-status.sh 4 s4 "<name>" "Generating test plan..." 0 <mode>`
-
-**Chọn cách plan theo input (tiết kiệm thời gian):**
-- **Sheet/spec đã có TC chi tiết** (steps + expected result từng row) → sheet CHÍNH LÀ plan. Map thẳng rows → plan format, KHÔNG gọi planner agent (agent browse app từng bước = chậm và thừa).
-- **Input là mô tả tự do / URL cần khám phá** → dùng Agent `playwright-test-planner`.
-- Fallback (không có agent): tự sinh `projects/<name>/specs/<slug>.md` với format: scenario title, pre-conditions, steps, expected outcomes, selector hints.
-
-**Nếu có `--screens`:** SCREENS.md chưa có → đây là lúc crawl 1 lần (planner duyệt các màn trong scope) sinh `projects/<name>/SCREENS.md`. Đã có → đọc để lấy selector/flow, chỉ browse màn còn thiếu. Xem STEP-screens.md.
-
-Auto mode → Bước 5. Interactive mode → hiển thị plan, chờ OK.
-
----
-
-## Bước 5: Sinh test code
-
-> ⚠️ **BẮT BUỘC — chạy NGAY đầu bước** (cập nhật dashboard, hay bị sót): `bash scripts/update-status.sh 5 s5 "<name>" "Generating test code..." 0 <mode>`
-
-**Chọn cách generate theo loại TC (tiết kiệm thời gian):**
-- **TC dạng API/HTTP/DB** (assert status code, response body, DB count — không thao tác UI phức tạp) → tự viết thẳng vào `projects/<name>/tests/<slug>.spec.ts`, KHÔNG cần generator agent chạy từng bước browser.
-- **TC dạng UI** (form, navigation, modal, selector phức tạp) → dùng Agent `playwright-test-generator` (khám phá DOM thật trước khi viết → ít lỗi selector, ít vòng heal).
-- 1 spec có cả 2 loại → agent lo phần UI, tự viết phần API — vẫn gộp chung 1 file.
-- Fallback (không có agent): tự viết toàn bộ.
-
-**TC ID phải khớp 1-1 với sheet/spec:**
-- Sheet ID `31` → test tên `TC-31: ...`. TUYỆT ĐỐI KHÔNG đánh số lại, không thêm suffix chữ cái mới.
-- Suffix chữ cái CHỈ dùng khi 1 TC trong sheet tách nhiều test con (cùng map 1 row).
-- Sau generate: đếm số TC spec = số TC ID duy nhất trong test file. Thiếu/thừa → sửa ngay.
-
-**Đọc HTML/view trước khi viết test** — xác nhận: submit button text, flash message selector, nav link text, form field names.
-Nếu có `--screens` và SCREENS.md đã có selector/flow màn cần dùng → lấy thẳng từ đó, KHỎI browse lại (nhanh hơn, ít heal hơn).
-
-**Nếu có `--kg` (Knowledge Graph — endpoint/route từ source):**
-- File `projects/<name>/knowledge/api.json` CHƯA có → build 1 lần (cần source app; đường dẫn lấy từ mount `/app-src` trong `projects/<name>/docker-compose.override.yml` hoặc truyền tay):
-  `npm run kg:build -- <name> --src <đường-dẫn-source-app>`  (chạy trong `automation/`)
-- File ĐÃ có → kiểm tra source có đổi không: `npm run kg:build -- <name> --src <app-src> --check`.
-  - Exit 0 (FRESH) → dùng graph hiện có.
-  - Exit 1 (STALE) → **CẢNH BÁO dev** (in rõ): "⚠️ Knowledge Graph của `<name>` đã cũ (source app đổi kể từ lần build lúc <meta.generated_at>). Endpoint/route trong graph có thể lệch. Chạy lại kèm `--kg-rebuild` để cập nhật." Sau đó **VẪN dùng graph cũ** và tiếp tục — KHÔNG tự rebuild. Dev tự quyết.
-- Có `--kg-rebuild` → build lại trước khi dùng (bất kể FRESH/STALE), rồi mới query.
-- File ĐÃ có → khi cần biết endpoint (method/path) cho TC dạng API/HTTP → **đọc `api.json` thay vì grep source app**. Mỗi node có `source` = `file:line` để mở đúng chỗ khi cần chi tiết.
-- ⚠️ Graph CHỈ cho biết *endpoint tồn tại ở đâu* (cách gọi). Expected value (status code, body kỳ vọng) VẪN lấy từ spec/sheet — KHÔNG lấy từ graph. Xem STEP-knowledge-graph.md.
-
-Quy tắc viết test:
-- Selector: `getByRole` > `getByLabel` > `getByText` > CSS
-- Wait: dùng auto-wait của Playwright, KHÔNG `waitForTimeout`
-- Credentials: `process.env.TEST_USER`, `process.env.TEST_PASS`
-- **Spec-first:** expected value trong assertion lấy NGUYÊN VĂN từ spec/sheet — KHÔNG lấy từ app source/config/behavior quan sát được. Mỗi TC có comment traceability trước assertion chính.
-- **Login lặp lại → dùng `storageState`:** nếu nhiều TC cùng cần login, login 1 lần qua setup project (`login.setup.ts` + `storageState` trong config), KHÔNG `beforeEach` login UI từng test — nhanh hơn và ít flaky hơn.
-- **Screenshot evidence BẮT BUỘC** mỗi TC — chụp SAU assertion chính:
-
-```typescript
-test('TC-X: <title>', async ({ page }, testInfo: TestInfo) => {
-  // ... Arrange + Act ...
-  // SPEC: row 15 — "403 Hourly registration limit exceeded"
-  await expect(locator).toBeVisible(); // assertion chính
-  await page.screenshot({ path: testInfo.outputPath('evidence.png') });
-});
-```
-
-**Mock env (feature flag):**
-```typescript
-const mockVal = process.env.TEST_MOCK_<TÊN_BIẾN>;
-if (mockVal === 'true' || mockVal === 'false') {
-  featureEnabled = mockVal === 'true';
-} else {
-  featureEnabled = await detectFromPage(page);
-}
-```
-
-Auto mode → Bước 6. Interactive mode → hiển thị code, chờ confirm.
-
----
-
-## Bước 6: Execute + auto-heal
-
-> 📊 `bash scripts/update-status.sh 6 s6 "<name>" "Running tests in Docker..." 0 normal`
+Gom bước cũ 6b + 7 + 7c + 7d + 7e.
 
 ```bash
-cd $APP_ROOT/automation
-SPEC_FILE="projects/<name>/tests/<slug>.spec.ts" ./scripts/run-test.sh <name>
-# --fast: TEST_FAST=1 SPEC_FILE=... ./scripts/run-test.sh <name>
-# --live: TEST_LIVE=1 SPEC_FILE=... ./scripts/run-test.sh <name>
-# --rerun: ./scripts/run-test.sh <name>  (không có SPEC_FILE)
-# --only: ... --grep "<test>"
-# Heal rerun: TEST_RUN_ID="${RUN_ID}_h1" SPEC_FILE=... ./scripts/run-test.sh <name>  (Rule #17 — KHÔNG dùng RUN_ID gốc)
+cd "$APP_ROOT/automation"
+bash scripts/update-status.sh 4 finalize "<name>" "Finalizing report..." 0 normal
+node scripts/pipeline/finalize-run.mjs "<name>" "<run-id>" --slug="<slug>" --mode=<normal|live|fast> --from="$RUN_STARTED_AT"
+bash scripts/update-status.sh 4 finalize "<name>" "Done" 0 normal done
 ```
 
-Đọc `Run ID:` từ output wrapper. KHÔNG tự đoán.
+`finalize-run.mjs` tự:
+- convert video bằng `convert-videos.sh` (trừ `--fast` hoặc `--skip-convert`);
+- sinh header + report skeleton bằng `report/gen-report.mjs`;
+- move seed file về `automation/seeds/<name>/`;
+- save source-meta bằng hash đã tính ở PREP;
+- ghi kết quả ra Sheet/Doc nếu state có `--sheet`/`--doc`;
+- copy checklist vào run dir (`<run-dir>/.run-checklist.md`) và mark finalize done.
+- reset project-level `.run-state.json`/`.run-checklist.md` về `idle` để lần chạy sau không resume nhầm state cũ. Run-level state/checklist vẫn giữ trong run dir để audit.
 
-> 🔒 run-test.sh tự chạy 2 guard trước khi test: (1) chặn RUN_ID đã có artifacts (Rule #17), (2) `lint-test.sh` chặn fake assertion / `test.skip` che bug (Rule #15). Bị chặn → sửa test code theo spec, KHÔNG bypass guard.
-
-**`--fast` mode:** bỏ qua heal → thẳng Bước 7 compact (3 dòng, không sinh file).
-
-**Normal mode, có fail — heal loop:**
-```
-heal_count = 0
-while heal_count < max_heal AND có fail:
-  📊 bash scripts/update-status.sh 6 s6 "<name>" "Healing attempt <heal_count+1>: <TC đang fail>" <heal_count+1> normal
-  0. Đọc spec → xác định expected behavior của TC đang fail
-  1. Extract lỗi từ results.json — KHÔNG Read raw JSON (file lớn tốn token/chậm):
-       python3 -c "
-       import json
-       d=json.load(open('projects/<name>/test-results/runs/<run-id>/results.json'))
-       def walk(suites):
-           for s in suites:
-               for sp in s.get('specs',[]):
-                   for t in sp.get('tests',[]):
-                       for r in t.get('results',[]):
-                           if r.get('status') not in ('passed','skipped'):
-                               errs=' | '.join(e.get('message','')[:300] for e in r.get('errors',[]))
-                               print(f\"{sp['title']} :: {r.get('status')} :: {errs}\")
-               walk(s.get('suites',[]))
-       walk(d.get('suites',[]))"
-  2. Phân loại TỪNG TC fail:
-     ĐƯỢC sửa: selector không match, timing, locator fragile
-     KHÔNG sửa: expected value, assertion text, count, flow logic
-       → App bug → để fail, ghi vào report
-     (Nếu có `--screens` và fix là selector do UI đổi → ghi selector mới NGƯỢC vào
-      projects/<name>/SCREENS.md + cập nhật content_hash. Xem STEP-screens.md.)
-  3. Patch test code — GỘP các TC fail cùng root cause vào 1 lần patch
-     (vd cùng 1 helper/selector dùng chung → sửa 1 chỗ, heal N TC trong 1 vòng)
-  4. [CRITICAL] Heal rerun PHẢI dùng HEAL_RUN_ID riêng — KHÔNG ĐƯỢC dùng RUN_ID gốc:
-       HEAL_RUN_ID="${RUN_ID}_h${heal_count}"
-       TEST_RUN_ID="$HEAL_RUN_ID" SPEC_FILE=... ./scripts/run-test.sh <name> --grep "TC-14:|TC-20:"
-     (--grep gộp TẤT CẢ TC vừa patch trong vòng này — dùng prefix "TC-<n>:", 1 lần rerun cho cả batch)
-     ⚠️ run-test.sh sẽ tự động EXIT 1 nếu phát hiện artifacts đã tồn tại trong RUN_ID.
-        Nếu gặp lỗi này → đang dùng sai RUN_ID → phải dùng HEAL_RUN_ID.
-  5. Merge kết quả heal vào run gốc:
-     a. Copy artifacts của TC vừa pass từ heal dir → original artifacts dir:
-          cp -r "projects/<name>/test-results/runs/${HEAL_RUN_ID}/artifacts/." \
-                "projects/<name>/test-results/runs/${RUN_ID}/artifacts/"
-     b. Cập nhật results.json gốc (chỉ update TC healed, giữ nguyên phần còn lại):
-          python3 << 'PY'
-          import json
-          orig = json.load(open(f'projects/<name>/test-results/runs/{RUN_ID}/results.json'))
-          heal = json.load(open(f'projects/<name>/test-results/runs/{HEAL_RUN_ID}/results.json'))
-          heal_map = {}
-          def extract(suites):
-              for s in suites:
-                  for spec in s.get('specs', []):
-                      for t in spec.get('tests', []):
-                          for r in t.get('results', []):
-                              heal_map[spec['title']] = r.get('status', 'unknown')
-                  extract(s.get('suites', []))
-          for suite in heal.get('suites', []): extract(suite)
-          def update(suites):
-              for s in suites:
-                  for spec in s.get('specs', []):
-                      if spec['title'] in heal_map and heal_map[spec['title']] == 'passed':
-                          for t in spec.get('tests', []):
-                              for r in t.get('results', []): r['status'] = 'passed'
-                  update(s.get('suites', []))
-          for suite in orig.get('suites', []): update(suite)
-          json.dump(orig, open(f'projects/<name>/test-results/runs/{RUN_ID}/results.json','w'), ensure_ascii=False, indent=2)
-          print('[heal-merge] results.json updated')
-          PY
-     c. Xóa heal dir để tiết kiệm disk:
-          rm -rf "projects/<name>/test-results/runs/${HEAL_RUN_ID}"
-  heal_count += 1
-```
-
-> ⚠️ **Lý do KHÔNG dùng `TEST_RUN_ID=<original>` cho heal rerun:**
-> `run-test.sh` có guard tự động kiểm tra: nếu `artifacts/` đã tồn tại và có data → **exit 1** ngay lập tức.
-> Đây là bảo vệ cứng ở script level — không thể bypass. Heal PHẢI dùng HEAL_RUN_ID riêng.
-
-**TUYỆT ĐỐI KHÔNG** thêm `test.fail()`, `test.skip()`, `test.fixme()` để che bug (trừ khi spec yêu cầu rõ hoặc TC BLOCKED per Rule #15).
-
-Sau max_heal hoặc xác định app bug → ghi nhận ngắn gọn → **TIẾP TỤC NGAY sang Bước 6b.**
-
----
-
-## Bước 6b: Convert video webm → mp4
-
-> ⚠️ **BẮT BUỘC — KHÔNG SKIP.** Phải chạy sau MỌI lần test, kể cả 100% pass.
-
-> 📊 `bash scripts/update-status.sh 6 s6b "<name>" "Converting videos..." 0 normal`
-
-```bash
-cd $APP_ROOT/automation
-./scripts/convert-videos.sh <name> <run-id>
-```
-
-Script tự lo: convert webm→mp4 song song 4 luồng + ghép `full-session.mp4` theo **đúng thứ tự chạy test** (mtime). KHÔNG tự viết lệnh ffmpeg inline thay script.
-
-Lần đầu chưa build image: `docker compose build playwright` trước.
-
----
-
-## Bước 7: Tổng hợp report
-
-> ⚠️ **BẮT BUỘC — KHÔNG SKIP DÙ TEST FAIL HAY HEAL HẾT.**
-
-> 📊 `bash scripts/update-status.sh 7 s7 "<name>" "Generating report..." 0 normal`
-> Xong hết: `bash scripts/update-status.sh 7 s7 "<name>" "Done" 0 normal done`
-
-**`--fast` mode — compact, không sinh file:**
-```
-⚡ Fast run — project `<name>` | Run ID: <run-id>
-📊 Total: N | ✅ Pass: x | ❌ Fail: y
-📄 JSON: file://$APP_ROOT/automation/projects/<name>/test-results/runs/<run-id>/results.json
-```
-
-**Normal mode:** → **Đọc `skills/ai-test/steps/STEP-report.md`** để biết format đầy đủ.
-
-**Xác nhận path trước khi viết:**
-```bash
-ls "projects/<name>/test-results/runs/<run-id>/results.json" && echo "✅ OK" || echo "❌ SAI PATH"
-```
-
----
-
-## Bước 7c: Di chuyển seed file
-
-```bash
-SEEDS_DIR="$APP_ROOT/automation/seeds/<name>"
-mkdir -p "$SEEDS_DIR"
-find projects/<name>/tests/ -name "seed*.spec.ts" | while read f; do
-  mv "$f" "$SEEDS_DIR/"
-done
-```
-
-Ghi note vào report: `📦 Seed files đã move về: automation/seeds/<name>/`
-
----
-
-## Bước 7d: Ghi kết quả vào Google Sheet / Doc (chỉ khi có flag)
-
-Chỉ ghi khi có `--sheet=<url>` hoặc `--doc=<url>`. Không có flag → bỏ qua.
-
-→ **Đọc `skills/ai-test/steps/STEP-7d-sheet.md`** để biết chi tiết.
-
----
-
-## Bước 7e: Lưu source-meta — BẮT BUỘC sau mỗi run
-
-> ⚠️ Phải chạy sau mỗi run. Thiếu → lần sau phải generate lại từ đầu.
-
-```bash
-cd $APP_ROOT/automation
-# ⚠️ Dùng --strip-result-cols giống hệt Bước 1b
-CONTENT=$(node scripts/load-google-sheet.mjs "<url>" --sheet="<tab>" --format=markdown --strip-result-cols 2>/dev/null) && \
-mkdir -p projects/<name>/specs/.source-meta && \
-python3 -c "
-import json, hashlib, datetime, sys
-content = sys.stdin.read()
-h = 'sha256:' + hashlib.sha256(content.encode()).hexdigest()
-meta = {
-  'input': '<original-url-hoặc-path>',
-  'content_hash': h,
-  'last_tested': datetime.datetime.utcnow().isoformat() + 'Z',
-  'run_id': '<run-id>',
-  'spec_file': 'projects/<name>/specs/<slug>.md',
-  'test_file': 'projects/<name>/tests/<slug>.spec.ts',
-  'sheet_tab': '<tab-name-hoặc-rỗng>',
-  'input_slug': '<slug>'
-}
-json.dump(meta, open('projects/<name>/specs/.source-meta/<slug>.json','w'), ensure_ascii=False, indent=2)
-print('[meta] Saved')
-" <<< "\$CONTENT"
-```
-
-In ra chat: `💾 Source-meta saved: projects/<name>/specs/.source-meta/<slug>.json`
+Nếu còn fail/app bug, viết section phân tích lỗi tiếng Việt cho MỖI T fail/BLOCKED rồi append vào
+cuối `AI_REPORT.md` (không tự ráp lại bảng token/path/video — script đã làm). Cách viết:
+- Trước khi append, đọc `<run-dir>/.run-checklist.md` và `<run-dir>/.run-state.json` để audit:
+  mọi pha `prep`, `author`, `run_heal`, `finalize` phải là `done` hoặc `skipped` có lý do. Nếu thiếu,
+  append ghi chú `⚠️ Audit pipeline` nêu pha thiếu/chưa done; không được báo "hoàn tất đủ bước" bằng trí nhớ.
+- Với MỖI T fail/app bug, bắt buộc lấy facts từ `results.json`/failure extract + spec/test file:
+  expected verbatim từ spec, actual/error thực tế, test file + dòng assertion/step liên quan.
+- Nếu nghi là app bug, bắt buộc tìm vị trí app/source liên quan bằng source hiện có, Knowledge Graph (`--kg`)
+  hoặc `rg` theo route/API/text/field từ lỗi. Report `App code: <file>:<line>` khi tìm được. Nếu chưa tìm
+  được sau khi đã tìm, ghi `App code: chưa xác định sau khi rà <nguồn đã rà>` và hướng fix theo module/route gần nhất.
+  Không được bỏ trống vị trí bug, và không được đề xuất sửa assertion để khớp app.
+- Đã có sẵn dữ liệu quyết định (từ healer's `root_cause_summary`/`tc_app_bug`, hoặc rõ ràng tự thấy)
+  → gọi Agent `subagent_type: "report-writer"` (xem "Cách gọi agent tuỳ biến" ở Pha 2 — tự áp
+  `model: haiku` từ frontmatter, rẻ vì task chỉ là phrasing, KHÔNG cần suy luận). Prompt đưa CHỈ
+  dữ liệu đã quyết định (T id/title, expected verbatim từ spec, lỗi thực tế, category:
+  `app_bug|selector_fixed|blocked_third_party|unclear`, test file/line, app file/line hoặc lý do chưa xác định,
+  hướng fix cụ thể) — KHÔNG đưa cả transcript/DOM.
+  Writer chỉ phrasing, không tự judge lại category.
+- Chưa rõ category (case lạ, chưa qua healer) → main tự phân tích trực tiếp, KHÔNG gọi writer.
 
 ---
 
@@ -475,14 +244,14 @@ TEST_MOCK_<BIẾN>=true SPEC_FILE=... ./scripts/run-test.sh <name>
 
 ### Phương án 2: Đổi env thật trong container (BẮT BUỘC confirm)
 
-1. In rõ: `Để test <TC-list> cần đổi <VAR>=<old>→<new> trong <container>. Restore sau. Đồng ý?`
+1. In rõ: `Để test <T-list> cần đổi <VAR>=<old>→<new> trong <container>. Restore sau. Đồng ý?`
 2. Chờ "Yes" — KHÔNG tự đổi
 3. Đổi: `docker exec <container> sed -i 's/<old>/<new>/' <env_file>`
 4. Chạy test
 5. Restore BẮT BUỘC dù fail: `docker exec <container> sed -i 's/<new>/<old>/' <env_file>`
 6. Ghi vào report: env đã thay đổi và đã restore
 
-User từ chối → đánh dấu TC là BLOCKED.
+User từ chối → đánh dấu T là BLOCKED.
 
 ---
 
@@ -494,7 +263,7 @@ User từ chối → đánh dấu TC là BLOCKED.
 
 ## Liên quan
 
-- `skills/ai-test/rules/RULES.md` — 16 nguyên tắc bất biến (BẮT BUỘC đọc ở Bước 0)
+- `skills/ai-test/rules/RULES.md` — 18 nguyên tắc bất biến (BẮT BUỘC đọc ở Bước 0)
 - `skills/ai-test/steps/STEP-3b-seed.md` — quy tắc seed data chi tiết
 - `skills/ai-test/steps/STEP-report.md` — template AI_REPORT.md đầy đủ
 - `skills/ai-test/steps/STEP-7d-sheet.md` — ghi kết quả vào Google Sheet/Doc

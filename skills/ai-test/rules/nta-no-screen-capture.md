@@ -85,7 +85,7 @@ Phải:
 Cờ `--live` của ai-test **KHÔNG vi phạm** rule này, vì nó không đụng gì tới host:
 
 - Browser (Chromium) chạy **headed bên trong container Docker**, trên **màn hình ảo Xvfb**
-  (`run-live.sh`: `Xvfb :1` → `x11vnc -listen localhost` → `websockify ... 6080`).
+  (`scripts/live-entrypoint.sh`: `Xvfb :99` → `x11vnc -rfbport 5900` → `websockify 6080 localhost:5900`).
 - **Không** mở browser trên host, **không** screenshot host, **không** gọi `user32.dll`/Win32,
   **không** đưa cửa sổ host lên foreground, **không** GUI automation trên host.
 - User **tự mở** `http://localhost:6080/vnc.html` bằng browser của mình để xem — đúng tinh thần

@@ -13,7 +13,11 @@
     "sheet:load": "node scripts/load-google-sheet.mjs",
     "kg:build": "node scripts/knowledge/build-knowledge.mjs",
     "kg:tokens": "node scripts/measure-tokens.mjs",
-    "kg:screens": "node scripts/knowledge/gen-screens.mjs"
+    "session:fresh": "node scripts/check-session-freshness.mjs",
+    "kg:screens": "node scripts/knowledge/gen-screens.mjs",
+    "pipeline:prep": "node scripts/pipeline/prep-run.mjs",
+    "pipeline:finalize": "node scripts/pipeline/finalize-run.mjs",
+    "pipeline:checklist": "node scripts/pipeline/checklist.mjs"
   },
   "keywords": [],
   "author": "",

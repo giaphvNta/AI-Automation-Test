@@ -4,7 +4,7 @@
 # Tự động chạy trong run-test.sh — exit 1 nếu có vi phạm → test không được chạy.
 #
 # Exemption (dùng hạn chế, phải có căn cứ spec):
-#   - Dòng chứa "BLOCKED"   → TC bị chặn bởi third-party (hCaptcha/OTP/payment) theo Rule #15
+#   - Dòng chứa "BLOCKED"   → T bị chặn bởi third-party (hCaptcha/OTP/payment) theo Rule #15
 #   - Dòng chứa "lint-allow" → spec yêu cầu rõ ràng, ghi lý do: // lint-allow: <lý do + spec ref>
 
 set -euo pipefail
@@ -38,7 +38,7 @@ check_block "=[^;'\"]*\|\|\s*true\b" \
 
 # ── BLOCK: che giấu kết quả test (Rule #15 — app bug = test đỏ, không che)
 check_block 'test\.(skip|fixme|fail)\s*\(' \
-  "test.skip/fixme/fail che giấu kết quả (chỉ được dùng khi TC BLOCKED bởi third-party hoặc spec yêu cầu — thêm chữ BLOCKED hoặc lint-allow kèm lý do vào dòng đó)"
+  "test.skip/fixme/fail che giấu kết quả (chỉ được dùng khi T BLOCKED bởi third-party hoặc spec yêu cầu — thêm chữ BLOCKED hoặc lint-allow kèm lý do vào dòng đó)"
 
 # ── WARN: không chặn, chỉ nhắc
 WARN="$(grep -rnE 'waitForTimeout\(' "$TESTS_DIR" --include='*.spec.ts' 2>/dev/null | grep -v 'lint-allow' || true)"
@@ -50,7 +50,7 @@ fi
 if [ "$VIOLATIONS" -gt 0 ]; then
   echo ""
   echo "[lint-test] ❌ $VIOLATIONS loại vi phạm Rule #15 — test KHÔNG được chạy."
-  echo "[lint-test] Sửa test code theo spec. KHÔNG thêm exemption trừ khi TC thực sự bị chặn bởi third-party."
+  echo "[lint-test] Sửa test code theo spec. KHÔNG thêm exemption trừ khi T thực sự bị chặn bởi third-party."
   exit 1
 fi
 

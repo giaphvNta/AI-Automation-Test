@@ -47,7 +47,7 @@ File: `projects/<name>/SCREENS.md` (1 file/project).
 ## Auth
 - login_url: /mgt/login
 - cách login: fill input[name="mailaddress"] + input[name="admin_password"] → submit
-- storageState: .auth/admin.json   # login 1 lần, tái dùng — KHÔNG login lại mỗi TC
+- storageState: .auth/admin.json   # login 1 lần, tái dùng — KHÔNG login lại mỗi T
 
 ## Môi trường & công cụ (TÙY PROJECT — điền cái nào project này có, bỏ cái nào không)
 # ⚠️ KHÔNG cố định và KHÔNG giới hạn ở mail/DB: mỗi project khác nhau (khác port, khác công cụ,
@@ -75,7 +75,7 @@ File: `projects/<name>/SCREENS.md` (1 file/project).
 - Cleanup: <cách xóa>, marker AI_KEY: <vd mailaddress LIKE 'e2e-ai-tc%'>
 
 ## Không chạy trên stg/prod (test phá hoại / phụ thuộc third-party thật)
-- <TC-id>: <lý do — vd blacklist IP thật, spam rate-limit, captcha thật>
+- <T-id>: <lý do — vd blacklist IP thật, spam rate-limit, captcha thật>
 ```
 
 ## Khi UI thay đổi — cơ chế tự bảo trì
@@ -91,6 +91,6 @@ File: `projects/<name>/SCREENS.md` (1 file/project).
 
 - `base_url` + credentials: lấy từ `projects/<name>/.env` (hoặc `.env.dev`/`.env.stg`), KHÔNG hardcode trong SCREENS.md.
 - **Data recipes theo thứ tự ưu tiên:** API > UI flow > DB (DB chỉ khi local reachable). Trên stg/prod thường chỉ API/UI.
-- **TC phá hoại** (spam rate-limit, blacklist IP thật, xóa data thật): liệt kê ở mục "Không chạy trên stg/prod".
+- **T phá hoại** (spam rate-limit, blacklist IP thật, xóa data thật): liệt kê ở mục "Không chạy trên stg/prod".
   Khi chạy môi trường ngoài → đánh dấu SKIP-ENV trong report kèm lý do, KHÔNG chạy.
 - **Captcha/OTP/payment thật** trên stg: theo Rule #15 → BLOCKED, hỏi user test key hoặc mock.

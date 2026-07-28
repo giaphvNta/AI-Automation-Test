@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Đo token THẬT tiêu thụ trong 1 phiên Claude Code, đọc từ log JSONL của phiên.
+// Đo token THẬT tiêu thụ trong 1 phiên AI tool.
+// Backend đọc log JSONL của Claude Code tại ~/.claude/projects và Codex tại ~/.codex/sessions.
 // Dùng làm bằng chứng A/B: chạy /ai-test 1 lần KHÔNG --kg và 1 lần CÓ --kg (mỗi lần 1 phiên
 // riêng cho sạch), rồi so tổng token.
 //
@@ -14,27 +15,61 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
-const PROJECTS_DIR = join(homedir(), '.claude', 'projects');
+const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects');
+const CODEX_SESSIONS_DIR = join(homedir(), '.codex', 'sessions');
+const CODEX_ARCHIVED_SESSIONS_DIR = join(homedir(), '.codex', 'archived_sessions');
 
-async function listSessions() {
+async function walkJsonl(dir, out, tool, project = '') {
+  let entries = [];
+  try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
+  for (const entry of entries) {
+    const p = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await walkJsonl(p, out, tool, project || entry.name);
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.endsWith('.jsonl')) continue;
+    const s = await stat(p);
+    out.push({ path: p, project, tool, mtime: s.mtimeMs });
+  }
+}
+
+async function listClaudeSessions() {
   const out = [];
   let dirs = [];
-  try { dirs = await readdir(PROJECTS_DIR); } catch { return out; }
+  try { dirs = await readdir(CLAUDE_PROJECTS_DIR); } catch { return out; }
   for (const d of dirs) {
-    const dir = join(PROJECTS_DIR, d);
+    const dir = join(CLAUDE_PROJECTS_DIR, d);
     let files = [];
     try { files = await readdir(dir); } catch { continue; }
     for (const f of files) {
       if (!f.endsWith('.jsonl')) continue;
       const p = join(dir, f);
       const s = await stat(p);
-      out.push({ path: p, project: d, mtime: s.mtimeMs });
+      out.push({ path: p, project: d, tool: 'claude', mtime: s.mtimeMs });
     }
+  }
+  return out;
+}
+
+function normalizeTool(tool) {
+  if (!tool || tool === 'auto') return 'auto';
+  if (['codex', 'claude', 'all'].includes(tool)) return tool;
+  throw new Error(`Unknown --tool: ${tool}`);
+}
+
+export async function listSessions({ tool = 'auto' } = {}) {
+  tool = normalizeTool(tool);
+  const out = [];
+  if (tool === 'auto' || tool === 'all' || tool === 'claude') out.push(...await listClaudeSessions());
+  if (tool === 'auto' || tool === 'all' || tool === 'codex') {
+    await walkJsonl(CODEX_SESSIONS_DIR, out, 'codex');
+    await walkJsonl(CODEX_ARCHIVED_SESSIONS_DIR, out, 'codex-archived');
   }
   return out.sort((a, b) => b.mtime - a.mtime);
 }
 
-async function sumUsage(jsonlPath, from, to) {
+export async function sumUsage(jsonlPath, from, to) {
   const text = await readFile(jsonlPath, 'utf8');
   const acc = { input: 0, output: 0, cache_creation: 0, cache_read: 0, messages: 0, byModel: {},
                 first: null, last: null };
@@ -49,19 +84,26 @@ async function sumUsage(jsonlPath, from, to) {
       acc.first = acc.first == null ? ts : Math.min(acc.first, ts);
       acc.last = acc.last == null ? ts : Math.max(acc.last, ts);
     }
-    const u = obj?.message?.usage || obj?.usage;
+    const codexUsage = obj?.type === 'event_msg' && obj?.payload?.type === 'token_count'
+      ? obj.payload.info?.last_token_usage
+      : null;
+    const u = obj?.message?.usage || obj?.usage || codexUsage;
     if (!u) continue;
-    const model = obj?.message?.model || obj?.model || 'unknown';
+    const model = obj?.message?.model || obj?.model || obj?.payload?.info?.model || 'unknown';
+    const input = u.input_tokens || 0;
+    const output = u.output_tokens || 0;
+    const cacheCreation = u.cache_creation_input_tokens || u.cache_write_input_tokens || 0;
+    const cacheRead = u.cache_read_input_tokens || u.cached_input_tokens || 0;
     acc.messages++;
-    acc.input += u.input_tokens || 0;
-    acc.output += u.output_tokens || 0;
-    acc.cache_creation += u.cache_creation_input_tokens || 0;
-    acc.cache_read += u.cache_read_input_tokens || 0;
+    acc.input += input;
+    acc.output += output;
+    acc.cache_creation += cacheCreation;
+    acc.cache_read += cacheRead;
     const m = (acc.byModel[model] ||= { input: 0, output: 0, cache_creation: 0, cache_read: 0 });
-    m.input += u.input_tokens || 0;
-    m.output += u.output_tokens || 0;
-    m.cache_creation += u.cache_creation_input_tokens || 0;
-    m.cache_read += u.cache_read_input_tokens || 0;
+    m.input += input;
+    m.output += output;
+    m.cache_creation += cacheCreation;
+    m.cache_read += cacheRead;
   }
   return acc;
 }
@@ -92,7 +134,28 @@ function printReport(path, a) {
   }
 }
 
+export function toTokenJson(a, meta = {}) {
+  const total = a.input + a.output + a.cache_creation + a.cache_read;
+  return {
+    tool: meta.tool || 'unknown',
+    source_path: meta.path || '',
+    input: a.input,
+    output: a.output,
+    cache_creation: a.cache_creation,
+    cache_read: a.cache_read,
+    total_billed: total,
+    messages: a.messages,
+    first: a.first ? new Date(a.first).toISOString() : null,
+    last: a.last ? new Date(a.last).toISOString() : null,
+    by_model: a.byModel,
+    measured_at: new Date().toISOString(),
+  };
+}
+
 function getOpt(name) {
+  const prefix = `${name}=`;
+  const eq = process.argv.find((arg) => arg.startsWith(prefix));
+  if (eq) return eq.slice(prefix.length);
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : null;
 }
@@ -100,37 +163,35 @@ function getOpt(name) {
 async function main() {
   const arg = process.argv[2];
   if (!arg || arg === '--help') {
-    console.log('Usage: measure-tokens.mjs [--latest | --list | <file.jsonl>] [--from <ISO>] [--to <ISO>]');
+    console.log('Usage: measure-tokens.mjs [--latest | --list | <file.jsonl>] [--tool=auto|codex|claude|all] [--from <ISO>] [--to <ISO>]');
     process.exit(arg ? 0 : 1);
   }
   const from = getOpt('--from') ? Date.parse(getOpt('--from')) : null;
   const to = getOpt('--to') ? Date.parse(getOpt('--to')) : null;
+  const tool = normalizeTool(getOpt('--tool') || process.env.AI_TOKEN_TOOL || 'auto');
   if (arg === '--list') {
-    const s = await listSessions();
+    const s = await listSessions({ tool });
     for (const x of s.slice(0, 15)) {
-      console.log(`${new Date(x.mtime).toISOString()}  ${x.project}  ${x.path}`);
+      console.log(`${new Date(x.mtime).toISOString()}  ${x.tool}  ${x.project || '-'}  ${x.path}`);
     }
     return;
   }
   let path = arg;
+  let selected = null;
   if (arg === '--latest') {
-    const s = await listSessions();
+    const s = await listSessions({ tool });
     if (!s.length) { console.error('Không tìm thấy phiên nào.'); process.exit(1); }
-    path = s[0].path;
+    selected = s[0];
+    path = selected.path;
   }
   const a = await sumUsage(path, from, to);
   if (process.argv.includes('--json')) {
-    const total = a.input + a.output + a.cache_creation + a.cache_read;
-    console.log(JSON.stringify({
-      input: a.input, output: a.output, cache_creation: a.cache_creation,
-      cache_read: a.cache_read, total_billed: total, messages: a.messages,
-      first: a.first ? new Date(a.first).toISOString() : null,
-      last: a.last ? new Date(a.last).toISOString() : null,
-      by_model: a.byModel, measured_at: new Date().toISOString(),
-    }, null, 2));
+    console.log(JSON.stringify(toTokenJson(a, { tool: selected?.tool || tool, path }), null, 2));
     return;
   }
   printReport(path, a);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main().catch((e) => { console.error(e); process.exit(1); });
+}

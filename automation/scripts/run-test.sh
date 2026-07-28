@@ -47,6 +47,15 @@ export TEST_RUN_ID="$RUN_ID"
 export TEST_FAST="${TEST_FAST:-}"
 export TEST_LIVE="${TEST_LIVE:-}"
 
+# If the orchestrator parsed --live during PREP but forgot to pass TEST_LIVE=1
+# into this wrapper, honor the saved run state so noVNC is still published.
+if [ -z "$TEST_LIVE" ] && [ -f "$PROJECT_DIR/.run-state.json" ]; then
+  STATE_LIVE="$(node -e 'const fs=require("fs"); try { const s=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write((s.mode==="live" || s.flags?.live) ? "1" : ""); } catch {}' "$PROJECT_DIR/.run-state.json")"
+  if [ -n "$STATE_LIVE" ]; then
+    export TEST_LIVE=1
+  fi
+fi
+
 mkdir -p "$RUN_DIR"
 
 # Guard: từ chối nếu run dir đã có artifacts — ngăn heal rerun ghi đè main run
@@ -63,6 +72,11 @@ fi
 echo "[run-test] 🐳 Project: '$PROJECT_NAME' | Run ID: $RUN_ID"
 [ -n "$TEST_FAST" ] && echo "[run-test] ⚡ Fast mode ON (no video/trace)"
 [ -n "$TEST_LIVE" ] && echo "[run-test] 🖥️  Live mode ON — mở http://localhost:6080/vnc.html để xem"
+if [ -n "$TEST_LIVE" ] && tr '\0' ' ' < /proc/1/cmdline 2>/dev/null | grep -q -- '--unshare-net'; then
+  echo "[run-test] ⚠️  Codex/network sandbox detected (--unshare-net)."
+  echo "[run-test] ⚠️  noVNC vẫn chạy trong container, nhưng http://localhost:6080/vnc.html có thể không truy cập được từ browser host."
+  echo "[run-test] ⚠️  Với Codex + --live, hãy chạy lệnh này outside sandbox / sandbox_permissions=require_escalated để port 6080 publish ra host."
+fi
 
 # Cài deps chỉ khi package-lock.json thay đổi, không cài lại mỗi lần chạy test
 # shellcheck disable=SC2086

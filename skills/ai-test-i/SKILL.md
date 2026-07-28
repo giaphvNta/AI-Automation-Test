@@ -1,6 +1,6 @@
 ---
 name: ai-test-i
-description: "AI Automation Test (Interactive). Gõ /ai-test-i → AI hỏi input + project + cờ mode qua picker (AskUserQuestion), rồi chạy đúng pipeline 7 bước của ai-test."
+description: "AI Automation Test (Interactive). Gõ /ai-test-i → AI hỏi input + project + cờ mode qua picker (AskUserQuestion), rồi chạy đúng pipeline 4 pha của ai-test."
 argument-hint: "[không cần flag — thiếu gì sẽ hỏi qua picker]"
 ---
 
@@ -13,8 +13,12 @@ argument-hint: "[không cần flag — thiếu gì sẽ hỏi qua picker]"
 
 ## Paths — TỰ SUY RA, KHÔNG hardcode
 
-**APP_ROOT = đường dẫn bạn vừa Read file này, bỏ đuôi `/skills/ai-test-i/SKILL.md`.**
-Tool có thể clone ở path bất kỳ, máy bất kỳ (Linux/WSL/macOS) — luôn suy APP_ROOT từ path đọc file, không dùng path cứng.
+Nếu đang đọc skill từ `~/.codex/skills/...`, trước tiên chạy `cat ~/.ai-automation-test-root`.
+Nếu marker tồn tại và path có thư mục `automation/`, **APP_ROOT = nội dung marker**.
+Chỉ khi không có marker, **APP_ROOT = đường dẫn bạn vừa Read file này, bỏ đuôi `/skills/ai-test-i/SKILL.md`.**
+Tool có thể clone ở path bất kỳ, máy bất kỳ (Linux/WSL/macOS) — ưu tiên marker do `setup.sh` ghi,
+chỉ fallback sang path đọc file khi skill nằm trong repo source.
+Nếu `$APP_ROOT/automation` không tồn tại, DỪNG và kiểm tra marker/setup; KHÔNG tự dò sang repo khác.
 
 ```
 AI_TEST_SKILL = $APP_ROOT/skills/ai-test/SKILL.md
@@ -30,7 +34,10 @@ PROJECTS      = $APP_ROOT/automation/projects
 
 ---
 
-## Phần A — Thu thập tham số (qua AskUserQuestion)
+## Phần A — Thu thập tham số
+
+Ưu tiên dùng picker/AskUserQuestion nếu AI tool hiện tại hỗ trợ. Nếu chạy trên Codex hoặc môi trường
+không có picker, hỏi cùng nội dung bằng chat thường, gom câu trả lời rồi ráp tham số giống hệt A3.
 
 ### A0. Parse `$ARGUMENTS` đã có
 
@@ -50,9 +57,10 @@ ls -1t $APP_ROOT/automation/projects/ 2>/dev/null
 ```
 Lấy tối đa **4 project mới nhất** làm options cho câu hỏi project. Project khác / project mới → user bấm **"Other"** để nhập tên.
 
-### A2. Gọi AskUserQuestion — chỉ đưa các câu hỏi cho phần còn thiếu
+### A2. Gọi AskUserQuestion hoặc hỏi chat thường — chỉ đưa các câu hỏi cho phần còn thiếu
 
-Gộp tất cả câu hỏi cần thiết vào **một** lần gọi AskUserQuestion (tối đa 4 câu):
+Nếu có AskUserQuestion/picker, gộp tất cả câu hỏi cần thiết vào **một** lần gọi (tối đa 4 câu).
+Nếu không có picker, hỏi bằng chat thường theo cùng thứ tự và chỉ hỏi phần còn thiếu:
 
 - **Câu INPUT** (chỉ khi `MISSING_INPUT`):
   - question: `"Bạn muốn test gì? Bấm \"Other\" để dán thẳng URL / path / mô tả ngay bây giờ — nhanh nhất. Hoặc chọn loại nguồn rồi mình hỏi giá trị sau."`
@@ -120,15 +128,15 @@ Ghép theo thứ tự: `<input> --project=<name> <mode-flags> <sheet-flags> <pas
 
 In ra chat 1 dòng xác nhận (KHÔNG chờ confirm, chạy luôn):
 ```
-▶ Chạy: /ai-test <chuỗi-tham-số-đã-ráp>
+▶ Chạy pipeline ai-test với tham số: <chuỗi-tham-số-đã-ráp>
 ```
 
 ---
 
 ## Phần B — Thực thi pipeline ai-test
 
-1. **Đọc TOÀN BỘ** `$APP_ROOT/skills/ai-test/SKILL.md` trong **MỘT lần Read** (offset=1, limit=2000). Đọc thiếu = bỏ sót Bước 1b/3b/luật env → test SAI.
-2. Thực hiện **đúng quy trình 7 bước** trong file đó, coi chuỗi tham số đã ráp ở A3 là `$ARGUMENTS` đầu vào của `ai-test`.
+1. **Đọc TOÀN BỘ** `$APP_ROOT/skills/ai-test/SKILL.md` trong **MỘT lần Read** (offset=1, limit=2000). Đọc thiếu = bỏ sót Pha 1/Pha 2/luật env → test SAI.
+2. Thực hiện **đúng quy trình 4 pha** trong file đó, coi chuỗi tham số đã ráp ở A3 là `$ARGUMENTS` đầu vào của `ai-test`.
 3. Từ đây là **auto mode** — không hỏi giữa chừng (trừ trường hợp `ai-test` quy định phải confirm: đổi env thật, hoặc data bắt buộc phải thật không fake được; và `--interactive` nếu user đã chọn).
 
 > Toàn bộ output (report path, video, source-meta, Google Sheet/Doc write-back...) do `ai-test` xử lý. Skill này không in report riêng.
