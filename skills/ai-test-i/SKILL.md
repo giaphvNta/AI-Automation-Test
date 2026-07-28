@@ -13,8 +13,12 @@ argument-hint: "[không cần flag — thiếu gì sẽ hỏi qua picker]"
 
 ## Paths — TỰ SUY RA, KHÔNG hardcode
 
-**APP_ROOT = đường dẫn bạn vừa Read file này, bỏ đuôi `/skills/ai-test-i/SKILL.md`.**
-Tool có thể clone ở path bất kỳ, máy bất kỳ (Linux/WSL/macOS) — luôn suy APP_ROOT từ path đọc file, không dùng path cứng.
+Nếu đang đọc skill từ `~/.codex/skills/...`, trước tiên chạy `cat ~/.ai-automation-test-root`.
+Nếu marker tồn tại và path có thư mục `automation/`, **APP_ROOT = nội dung marker**.
+Chỉ khi không có marker, **APP_ROOT = đường dẫn bạn vừa Read file này, bỏ đuôi `/skills/ai-test-i/SKILL.md`.**
+Tool có thể clone ở path bất kỳ, máy bất kỳ (Linux/WSL/macOS) — ưu tiên marker do `setup.sh` ghi,
+chỉ fallback sang path đọc file khi skill nằm trong repo source.
+Nếu `$APP_ROOT/automation` không tồn tại, DỪNG và kiểm tra marker/setup; KHÔNG tự dò sang repo khác.
 
 ```
 AI_TEST_SKILL = $APP_ROOT/skills/ai-test/SKILL.md

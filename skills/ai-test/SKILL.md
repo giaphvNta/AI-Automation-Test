@@ -16,16 +16,22 @@ argument-hint: "<url|file|sheet|description> --project=<name> [--target=<url>] [
 ## Paths — TỰ SUY RA, KHÔNG hardcode
 
 > ⚠️ Tool có thể được clone ở path bất kỳ, trên máy bất kỳ (Linux/WSL/macOS).
-> **APP_ROOT = đường dẫn bạn vừa Read file SKILL.md này, bỏ đuôi `/skills/ai-test/SKILL.md`.**
+> **Nếu đang đọc skill từ `~/.codex/skills/...` thì KHÔNG suy APP_ROOT từ path đó.**
+> Trước tiên chạy `cat ~/.ai-automation-test-root`; nếu file tồn tại và path có thư mục `automation/`
+> thì **APP_ROOT = nội dung file marker này**.
+> Chỉ khi không có marker, **APP_ROOT = đường dẫn bạn vừa Read file SKILL.md này, bỏ đuôi `/skills/ai-test/SKILL.md`.**
 > Ví dụ đọc `/Users/an/ai-automation-test/skills/ai-test/SKILL.md` → `APP_ROOT=/Users/an/ai-automation-test`.
 > Đặt biến 1 lần trước Pha 1 rồi dùng xuyên suốt:
 
 ```
-APP_ROOT     = <thư mục chứa repo — tự suy từ path đọc SKILL.md>
+APP_ROOT     = <cat ~/.ai-automation-test-root nếu có; fallback suy từ path đọc SKILL.md>
 HUB          = $APP_ROOT/automation
 PROJECTS     = $APP_ROOT/automation/projects
 SERVICE_AUTH = $APP_ROOT/service-auth.json   (Google Sheets - optional)
 ```
+
+Nếu `$APP_ROOT/automation` không tồn tại, DỪNG và kiểm tra marker/setup; KHÔNG tự dò sang repo
+automation khác hoặc project app hiện tại vì sẽ chạy nhầm hub.
 
 Mọi lệnh bash chạy sau `cd "$APP_ROOT/automation"` → dùng path **tương đối** (`scripts/...`, `projects/...`).
 Script (.sh/.mjs) đều tự định vị nên gọi bằng path tương đối luôn đúng.
@@ -160,7 +166,10 @@ Gom bước cũ 6. Main chỉ chạy script và gọi healer khi fail.
 cd "$APP_ROOT/automation"
 bash scripts/update-status.sh 3 run "<name>" "Running tests..." 0 normal
 RUN_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-SPEC_FILE="$(node -e 'const s=require("./projects/<name>/.run-state.json"); console.log(s.test_file)')" ./scripts/run-test.sh "<name>" [--grep "<only>"]
+STATE_JSON="projects/<name>/.run-state.json"
+SPEC_FILE="$(node -e 'const s=require("./"+process.argv[1]); console.log(s.test_file)' "$STATE_JSON")" \
+TEST_LIVE="$(node -e 'const s=require("./"+process.argv[1]); process.stdout.write((s.mode==="live"||s.flags?.live)?"1":"")' "$STATE_JSON")" \
+./scripts/run-test.sh "<name>" [--grep "<only>"]
 ```
 
 Đọc `Run ID:` từ output wrapper, không tự đoán. `run-test.sh` giữ guard Rule #15 và #17.
@@ -206,11 +215,21 @@ bash scripts/update-status.sh 4 finalize "<name>" "Done" 0 normal done
 
 Nếu còn fail/app bug, viết section phân tích lỗi tiếng Việt cho MỖI T fail/BLOCKED rồi append vào
 cuối `AI_REPORT.md` (không tự ráp lại bảng token/path/video — script đã làm). Cách viết:
+- Trước khi append, đọc `<run-dir>/.run-checklist.md` và `<run-dir>/.run-state.json` để audit:
+  mọi pha `prep`, `author`, `run_heal`, `finalize` phải là `done` hoặc `skipped` có lý do. Nếu thiếu,
+  append ghi chú `⚠️ Audit pipeline` nêu pha thiếu/chưa done; không được báo "hoàn tất đủ bước" bằng trí nhớ.
+- Với MỖI T fail/app bug, bắt buộc lấy facts từ `results.json`/failure extract + spec/test file:
+  expected verbatim từ spec, actual/error thực tế, test file + dòng assertion/step liên quan.
+- Nếu nghi là app bug, bắt buộc tìm vị trí app/source liên quan bằng source hiện có, Knowledge Graph (`--kg`)
+  hoặc `rg` theo route/API/text/field từ lỗi. Report `App code: <file>:<line>` khi tìm được. Nếu chưa tìm
+  được sau khi đã tìm, ghi `App code: chưa xác định sau khi rà <nguồn đã rà>` và hướng fix theo module/route gần nhất.
+  Không được bỏ trống vị trí bug, và không được đề xuất sửa assertion để khớp app.
 - Đã có sẵn dữ liệu quyết định (từ healer's `root_cause_summary`/`tc_app_bug`, hoặc rõ ràng tự thấy)
   → gọi Agent `subagent_type: "report-writer"` (xem "Cách gọi agent tuỳ biến" ở Pha 2 — tự áp
   `model: haiku` từ frontmatter, rẻ vì task chỉ là phrasing, KHÔNG cần suy luận). Prompt đưa CHỈ
   dữ liệu đã quyết định (T id/title, expected verbatim từ spec, lỗi thực tế, category:
-  `app_bug|selector_fixed|blocked_third_party|unclear`) — KHÔNG đưa cả transcript/DOM.
+  `app_bug|selector_fixed|blocked_third_party|unclear`, test file/line, app file/line hoặc lý do chưa xác định,
+  hướng fix cụ thể) — KHÔNG đưa cả transcript/DOM.
   Writer chỉ phrasing, không tự judge lại category.
 - Chưa rõ category (case lạ, chưa qua healer) → main tự phân tích trực tiếp, KHÔNG gọi writer.
 

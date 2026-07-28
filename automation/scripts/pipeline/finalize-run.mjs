@@ -160,6 +160,21 @@ async function writeReport(args, state, movedSeeds) {
   return reportPath.slice(AUTOMATION_DIR.length + 1).replace(/\\/g, '/');
 }
 
+async function writeTokenSnapshot(args) {
+  const runDir = join(AUTOMATION_DIR, 'projects', args.project, 'test-results', 'runs', args.runId);
+  const tokenPath = join(runDir, 'token.json');
+  if (existsSync(tokenPath)) return;
+  const measureArgs = ['scripts/measure-tokens.mjs', '--latest', '--json'];
+  if (process.env.AI_TOKEN_TOOL) measureArgs.push(`--tool=${process.env.AI_TOKEN_TOOL}`);
+  if (args.from) measureArgs.push('--from', args.from);
+  try {
+    const json = run('node', measureArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+    await writeFile(tokenPath, json.endsWith('\n') ? json : `${json}\n`);
+  } catch {
+    // Fail-open: token measurement must never block report/finalize.
+  }
+}
+
 function optionalWriteResults(state, args) {
   if (args.noSheetDoc || !state?.flags) return [];
   const done = [];
@@ -217,6 +232,7 @@ async function main() {
 
   const movedSeeds = await moveSeedFiles(projectDir);
   const metaPath = await saveSourceMeta(state, projectDir, args.runId);
+  if (args.mode !== 'fast') await writeTokenSnapshot(args);
   const reportPath = args.mode === 'fast' ? '' : await writeReport(args, state, movedSeeds);
   const integrations = optionalWriteResults(state, args);
 

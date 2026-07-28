@@ -58,6 +58,19 @@ Ghi `/tmp/report-skeleton.md` vào đầu `AI_REPORT.md` (thêm header Run ID/Da
 
 ---
 
+## 🧭 Audit pipeline
+
+| Phase | Status | Note |
+|---|---|---|
+| prep | ✅ done | <note từ .run-checklist.json> |
+| author | ✅ done hoặc ⏭ skipped | <note> |
+| run_heal | ✅ done | <note> |
+| finalize | ✅ done | <note> |
+
+> Các pha bắt buộc đã ở trạng thái `done` hoặc `skipped` có lý do trong checklist.
+
+---
+
 ## 💰 Token tiêu thụ (cả lần chạy)
 
 | Loại | Token |
@@ -68,8 +81,8 @@ Ghi `/tmp/report-skeleton.md` vào đầu `AI_REPORT.md` (thêm header Run ID/Da
 | cache_read | <cr> |
 | **TỔNG (billed)** | **<total>** |
 
-> **Mặc định luôn đo** mỗi lần chạy (không phải cờ, không opt-in) bằng `npm run kg:tokens` khi có log tương thích. Backend hiện tại đọc log Claude Code; trên Codex hoặc tool chưa có log tương thích thì freshness/token snapshot fail-open, không chặn report.
-> **Số cuối cùng chính xác trên Claude Code** do **Stop hook** (`.claude/hooks/token-stop-hook.sh`) tự ghi vào `<run-dir>/token.json` khi phiên kết thúc — deterministic, đủ cả phần đuôi run + sub-agent. Con số 💰 trong report này là snapshot lúc viết report (có thể thiếu phần sau report) → **dùng `token.json` làm nguồn chuẩn khi so A/B nếu file này tồn tại.**
+> **Mặc định luôn đo** mỗi lần chạy (không phải cờ, không opt-in) bằng `npm run kg:tokens` khi có log tương thích. Backend đọc log Claude Code (`~/.claude/projects`) và Codex (`~/.codex/sessions`). Tool chưa có log tương thích thì freshness/token snapshot fail-open, không chặn report.
+> **Số chuẩn để so A/B** là `<run-dir>/token.json` nếu file tồn tại. File này có `tool` và `source_path` để audit nguồn log. Claude Code có Stop hook ghi token khi phiên kết thúc; Codex/finalize ghi snapshot từ Codex session log trong Pha 4 bằng `measure-tokens.mjs --latest --json --from=<RUN_STARTED_AT>`. Nếu máy có cả Claude và Codex log, dùng `AI_TOKEN_TOOL=codex|claude` hoặc `--tool=codex|claude` để ép nguồn.
 
 ---
 
@@ -112,10 +125,10 @@ Ghi `/tmp/report-skeleton.md` vào đầu `AI_REPORT.md` (thêm header Run ID/Da
 
 **Vị trí code lỗi:**
 - Test file: `projects/<name>/tests/<file>.spec.ts` dòng X–Y
-- App code (nếu là app bug): `<file>:<line>` — <mô tả>
+- App code (nếu là app bug): `<file>:<line>` — <mô tả>. Nếu chưa xác định, ghi rõ `chưa xác định sau khi rà <nguồn đã rà>`.
 
 **Hướng fix:**
-- <hành động cụ thể>
+- <hành động cụ thể theo spec; nếu là app bug thì sửa app/source theo expected, KHÔNG sửa assertion để khớp actual>
 
 ---
 
@@ -144,11 +157,13 @@ Ghi `/tmp/report-skeleton.md` vào đầu `AI_REPORT.md` (thêm header Run ID/Da
 
 - **Phần văn bản mô tả viết bằng TIẾNG VIỆT** — summary, phân tích lỗi, root cause, hướng fix, ghi chú. KHÔNG viết bằng tiếng Anh.
 - **Giữ nguyên nhãn cố định**: `Run ID`, `Date`, `Mode`, `Total`, `Pass`, `Fail`, tên file, log, code.
-- **BẮT BUỘC đủ 4 section chính**: `## 📊 Kết quả tổng hợp`, `## 💰 Token tiêu thụ`, `## 📂 Đường dẫn`, `## 🎬 Video & ảnh từng test case` (bảng phải có cột **Ảnh** + **Video**). Thiếu bất kỳ cái nào = report KHÔNG hợp lệ → phải sinh lại.
+- **BẮT BUỘC đủ 5 section chính**: `## 📊 Kết quả tổng hợp`, `## 🧭 Audit pipeline`, `## 💰 Token tiêu thụ`, `## 📂 Đường dẫn`, `## 🎬 Video & ảnh từng test case` (bảng phải có cột **Ảnh** + **Video**). Thiếu bất kỳ cái nào = report KHÔNG hợp lệ → phải sinh lại.
 - **AI_REPORT.md là báo cáo CHÍNH THỨC** (đã merge heal — status + video/ảnh đúng). Playwright HTML report (`show-report.sh`, localhost:9323) chỉ là ảnh chụp lần chạy gốc, KHÔNG cập nhật sau heal → không dùng làm nguồn kết luận.
 - Path video phải là `.mp4` (đã convert ở Bước 6b). Tên thư mục lấy từ `ls`, không tự đặt.
 - Mỗi test case một dòng riêng trong bảng video.
-- Section headers phải có emoji: `## 📊`, `## 📂`, `## 🎬`, `## ❌`, `## ⚠️`, `## ⛔`.
+- Section headers phải có emoji: `## 📊`, `## 🧭`, `## 📂`, `## 🎬`, `## ❌`, `## ⚠️`, `## ⛔`.
+- Với mỗi `❌ fail`, phần phân tích lỗi phải có `Lỗi`, `Root cause`, `Vị trí code lỗi`, `Hướng fix`.
+  Nếu là app bug, phải có `App code: <file>:<line>` hoặc ghi rõ đã rà nguồn nào nhưng chưa xác định.
 
 ## In ra chat sau khi lưu file
 

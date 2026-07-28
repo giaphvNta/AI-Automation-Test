@@ -1,6 +1,6 @@
 # AI Automation Test
 
-> **Claude Code:** gõ `/ai-test`. **Codex:** dùng prompt đọc `skills/ai-test/SKILL.md`.  
+> **Claude Code:** gõ `/ai-test`. **Codex:** dùng skill `ai-test` sau khi chạy `./setup.sh --codex-only`.
 > Dev không cần làm gì ngoài gõ lệnh và xem kết quả.
 
 ---
@@ -69,19 +69,46 @@ cd ~/ai-automation-test   # thay bằng nơi bạn clone repo
 ./setup.sh
 ```
 
+Nếu chỉ setup cho **Codex** và không muốn ảnh hưởng gì tới Claude Code:
+
+```bash
+cd ~/ai-automation-test
+./setup.sh --codex-only
+```
+
+> Chạy lệnh này tại **repo automation hub muốn dùng**. Script ghi marker
+> `~/.ai-automation-test-root` trỏ tới repo hiện tại; Codex skill global sẽ đọc marker này trước,
+> nên khi dev đang mở project app khác vẫn không bị dò nhầm sang automation hub khác.
+> Nếu clone/move repo sang path mới, chạy lại `./setup.sh --codex-only`.
+
 Script tự động:
 - ✅ Kiểm tra Docker
 - ✅ Verify automation hub (agents, config)
 - ✅ Đăng ký slash command `/ai-test` + `/ai-test-i` vào `~/.claude/commands/` cho Claude Code (global — dùng được mọi project)
+- ✅ Cài Codex skill `ai-test` + `ai-test-i` vào `~/.codex/skills/` (global — dùng được mọi project sau khi mở phiên mới)
+- ✅ Merge hook validate `/ai-test` vào `~/.codex/hooks.json` và tự backup file cũ nếu có
 - ✅ Ghi `~/.ai-automation-test-root` để Codex/tool khác biết automation hub nằm ở đâu khi đang mở project khác
+- ✅ Verify Codex skill đọc `~/.ai-automation-test-root` trước, không suy nhầm `APP_ROOT` từ `~/.codex/skills` và không tự dò sang repo khác
 - ✅ Tạo `.gitignore`
 
-**Gỡ cài đặt** (xóa slash commands, giữ nguyên repo + Docker image):
+Với `--codex-only`, script chỉ làm các mục Codex/marker/gitignore và **không ghi vào**
+`~/.claude/commands`, không sửa `.claude/settings.json`, không dùng hook trong `.claude/hooks`.
+Setup sẽ fail nếu marker không trỏ tới repo hiện tại hoặc skill global thiếu rule đọc marker, để tránh
+Codex tự dò nhầm sang repo khác.
+
+**Gỡ cài đặt** (xóa slash commands/skills/hooks đã cài, giữ nguyên repo + Docker image):
 ```bash
 cd ~/ai-automation-test   # thay bằng nơi bạn clone repo
 ./setup.sh --uninstall
 ```
-Reload VSCode sau khi gỡ: `Ctrl+Shift+P` → **Developer: Reload Window**
+Chỉ gỡ phần Codex, không đụng Claude:
+```bash
+cd ~/ai-automation-test
+./setup.sh --uninstall-codex
+```
+Reload sau khi gỡ:
+- Claude Code: `Ctrl+Shift+P` → **Developer: Reload Window**
+- Codex: mở phiên mới
 
 ### Bước 3: Build Docker image
 
@@ -96,7 +123,8 @@ docker compose build playwright
 
 ### Bước 4: Reload AI tool
 
-Claude Code extension: `Ctrl+Shift+P` → **Developer: Reload Window**. Codex: mở phiên mới hoặc yêu cầu Codex đọc lại `skills/ai-test/SKILL.md`.
+Claude Code extension: `Ctrl+Shift+P` → **Developer: Reload Window**.
+Codex: mở phiên mới để nạp skill/hook vừa copy vào `~/.codex/skills` và `~/.codex/hooks.json`.
 
 ### Bước 5: Verify
 
@@ -108,9 +136,11 @@ Claude Code:
 
 Codex:
 ```
-Đọc skills/ai-test/SKILL.md và chạy pipeline cho: <input> --project=<name> [options]
+Dùng skill ai-test để chạy pipeline cho:
+<input> --project=<name> [options]
 ```
-Nếu Codex đang mở repo/project khác, dùng marker do `setup.sh` tạo:
+
+Nếu Codex chưa nạp skill mới hoặc đang chạy trong phiên cũ, dùng fallback marker do `setup.sh` tạo:
 ```
 Chạy cat ~/.ai-automation-test-root để lấy APP_ROOT.
 Sau đó đọc <APP_ROOT>/skills/ai-test/SKILL.md và chạy pipeline cho:
@@ -137,14 +167,21 @@ Claude Code dùng slash command đã đăng ký bởi `setup.sh`:
 
 ### Chạy bằng Codex
 
-Codex không cần slash command. Giao task theo dạng:
+Codex không cần slash command. Sau khi chạy `./setup.sh` và mở phiên mới, skill đã có global trong
+`~/.codex/skills`. Giao task theo dạng:
 
 ```
-Đọc skills/ai-test/SKILL.md và chạy pipeline cho:
+Dùng skill ai-test để chạy pipeline cho:
 <input> --project=<tên-project> [options]
 ```
 
-Khi đang làm trong project khác, dùng marker global:
+Chế độ tương tác cũng có skill riêng:
+
+```
+Dùng skill ai-test-i để hỏi input/project/flags rồi chạy pipeline.
+```
+
+Khi đang làm trong project khác nhưng Codex chưa nạp skill global, dùng marker global:
 
 ```
 Chạy cat ~/.ai-automation-test-root để lấy APP_ROOT.
@@ -155,6 +192,19 @@ Sau đó đọc <APP_ROOT>/skills/ai-test/SKILL.md và chạy pipeline cho:
 Codex dùng cùng `automation/scripts/`, cùng `projects/<name>/.run-state.json`, `.run-checklist.md`,
 `AI_REPORT.md`, video và write-back. Các phần riêng của Claude Code như `~/.claude/commands`,
 custom sub-agent registry hoặc token log chỉ là adapter/phụ trợ; core pipeline vẫn chạy được trên Codex.
+`setup.sh` cũng merge hook validate vào `~/.codex/hooks.json` và tạo backup dạng
+`~/.codex/hooks.json.bak.<timestamp>` trước khi sửa.
+
+Root safety cho nhiều máy/dev/project:
+- `~/.ai-automation-test-root` là nguồn chuẩn để Codex tìm automation hub.
+- Skill global trong `~/.codex/skills` KHÔNG được suy `APP_ROOT` từ `~/.codex/skills/...`.
+- Nếu marker thiếu hoặc marker không có thư mục `automation/`, Codex phải dừng và yêu cầu chạy lại setup,
+  không tự tìm `/project-workflow/automation` hay repo app hiện tại.
+
+Report trên Codex dùng cùng `AI_REPORT.md` như Claude Code. Report có section `## 🧭 Audit pipeline`
+đọc từ `.run-checklist.json` để kiểm tra PREP/AUTHOR/RUN+HEAL/FINALIZE đã `done` hoặc `skipped`
+có lý do. Nếu case fail do app bug, phần `## ❌ ... — Phân tích lỗi` phải ghi expected/actual,
+vị trí test assertion, vị trí app/source `<file>:<line>` nếu tìm được, và hướng fix theo spec.
 
 **Đã verify trên Codex (2026-07-13):**
 - PREP đọc spec dạng mô tả, check Docker/node_modules/agent files OK.
@@ -494,28 +544,32 @@ Chi tiết: `automation/scripts/knowledge/README.md`.
 
 ## Đo token tiêu thụ (bằng chứng A/B)
 
-Token tiêu thụ ở **pha authoring** (agent đọc source/DOM), không phải lúc chạy test. Hiện tool đo token
-đọc log Claude Code khi có; trên Codex hoặc tool không có log tương thích thì session freshness fail-open:
+Token tiêu thụ ở **pha authoring** (agent đọc source/DOM), không phải lúc chạy test. Tool đo token
+đọc log Claude Code (`~/.claude/projects`) và Codex (`~/.codex/sessions`) khi có; tool không có log
+tương thích thì session freshness fail-open:
 ```bash
 cd automation
 npm run kg:tokens -- --latest      # đo phiên mới nhất
 npm run kg:tokens -- --list        # liệt kê phiên
+npm run kg:tokens -- --latest --tool=codex   # ép đo Codex
+npm run kg:tokens -- --latest --tool=claude  # ép đo Claude Code
 npm run session:fresh              # cảnh báo nếu phiên hiện tại đã quá dài
 ```
 `TỔNG (billed)` = input + output + cache. AI_REPORT.md cũng tự log mục 💰 token (snapshot lúc report).
+`token.json` có `tool` và `source_path` để audit đang đo từ Codex hay Claude. Nếu máy có cả hai tool,
+đặt `AI_TOKEN_TOOL=codex` hoặc `AI_TOKEN_TOOL=claude` khi cần ép nguồn log.
 
 AI tool không xóa riêng phần cache/context đã tích lũy trong cùng một phiên: mỗi lượt sau có thể đọc lại
 toàn bộ tiền tố đã cache. Vì vậy mỗi lần `/ai-test` nên chạy trong một phiên riêng, hoặc clear context
 trước khi bắt đầu rồi resume bằng `projects/<project>/.run-checklist.md` + `.run-state.json`, đặc biệt nếu
-dự kiến có nhiều vòng authoring/heal. Pha PREP tự chạy `check-session-freshness.mjs` theo kiểu advisory:
-khi đọc được log Claude Code thì phiên quá dài sẽ được cảnh báo và ghi `session_freshness` vào state/report;
-trên Codex hoặc tool không có log tương thích, check này fail-open và không bao giờ chặn pipeline.
-Nếu máy có log Claude Code cũ, Codex có thể vẫn thấy `session_freshness.source="claude-code-latest"`;
-đây chỉ là cảnh báo chi phí/token, không ảnh hưởng kết quả test.
+dự kiến có nhiều vòng authoring/heal. Pha PREP tự chạy `check-session-freshness.mjs` theo kiểu advisory.
+Khi đọc được log Claude/Codex thì phiên quá dài sẽ được cảnh báo và ghi `session_freshness` vào state/report;
+trên tool không có log tương thích, check này fail-open và không bao giờ chặn pipeline.
+Trên Codex, source sẽ là `codex-latest`.
 
-**Số chuẩn để so A/B**: Stop hook `.claude/hooks/token-stop-hook.sh` tự ghi `<run-dir>/token.json`
-khi phiên kết thúc — đủ cả phần đuôi run + sub-agent, không phụ thuộc agent nhớ đo. Lấy `total_billed`
-trong `token.json` khi so sánh.
+**Số chuẩn để so A/B**: lấy `total_billed` trong `<run-dir>/token.json` khi file tồn tại.
+Claude Code ghi bằng Stop hook; Codex ghi snapshot trong Pha 4 FINALIZE từ `~/.codex/sessions`
+với mốc `RUN_STARTED_AT`.
 
 So A/B: chạy cùng 1 T — 1 lần không `--kg`, 1 lần có `--kg` (mỗi lần **1 phiên riêng**) → so `total_billed`.
 Chi tiết: `automation/scripts/knowledge/MEASURE-TOKENS.md`.
@@ -852,6 +906,17 @@ node scripts/write-results-to-doc.mjs \
                                 ├── video.mp4
                                 └── trace.zip
 ```
+
+File global do `setup.sh` cập nhật:
+- `~/.claude/commands/ai-test.md`, `~/.claude/commands/ai-test-i.md`
+- `~/.codex/skills/ai-test`, `~/.codex/skills/ai-test-i`
+- `~/.codex/hooks.json` (merge hook validate, backup trước khi sửa)
+- `~/.ai-automation-test-root`
+
+Khi chạy `./setup.sh --codex-only`, chỉ các file `~/.codex/*` và `~/.ai-automation-test-root`
+được cập nhật; phần `~/.claude/*` giữ nguyên.
+Skill global của Codex luôn lấy `APP_ROOT` từ `~/.ai-automation-test-root` trước, nên dev clone repo
+ở path khác hoặc đang mở project khác vẫn chạy đúng automation hub đã setup.
 
 ---
 

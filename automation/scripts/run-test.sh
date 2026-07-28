@@ -47,6 +47,15 @@ export TEST_RUN_ID="$RUN_ID"
 export TEST_FAST="${TEST_FAST:-}"
 export TEST_LIVE="${TEST_LIVE:-}"
 
+# If the orchestrator parsed --live during PREP but forgot to pass TEST_LIVE=1
+# into this wrapper, honor the saved run state so noVNC is still published.
+if [ -z "$TEST_LIVE" ] && [ -f "$PROJECT_DIR/.run-state.json" ]; then
+  STATE_LIVE="$(node -e 'const fs=require("fs"); try { const s=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write((s.mode==="live" || s.flags?.live) ? "1" : ""); } catch {}' "$PROJECT_DIR/.run-state.json")"
+  if [ -n "$STATE_LIVE" ]; then
+    export TEST_LIVE=1
+  fi
+fi
+
 mkdir -p "$RUN_DIR"
 
 # Guard: từ chối nếu run dir đã có artifacts — ngăn heal rerun ghi đè main run

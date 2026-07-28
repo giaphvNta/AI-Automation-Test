@@ -3,7 +3,7 @@
 // Không bao giờ block pipeline; lỗi đọc log hoặc fresh=false đều exit 0.
 //
 // Usage:
-//   node scripts/check-session-freshness.mjs [--threshold-tokens=3000000] [--threshold-messages=300] [--session=<file.jsonl>]
+//   node scripts/check-session-freshness.mjs [--threshold-tokens=3000000] [--threshold-messages=300] [--session=<file.jsonl>] [--tool=auto|codex|claude]
 //   --session: đo 1 phiên cụ thể thay vì luôn "mới nhất" (hữu ích khi debug/kiểm tra 1 phiên cũ).
 
 import { listSessions, sumUsage, toTokenJson } from './measure-tokens.mjs';
@@ -16,6 +16,7 @@ function parseArgs(argv) {
     thresholdTokens: DEFAULT_THRESHOLD_TOKENS,
     thresholdMessages: DEFAULT_THRESHOLD_MESSAGES,
     session: '',
+    tool: process.env.AI_TOKEN_TOOL || 'auto',
   };
   for (const arg of argv) {
     if (arg.startsWith('--threshold-tokens=')) {
@@ -24,8 +25,10 @@ function parseArgs(argv) {
       args.thresholdMessages = Number(arg.slice('--threshold-messages='.length)) || DEFAULT_THRESHOLD_MESSAGES;
     } else if (arg.startsWith('--session=')) {
       args.session = arg.slice('--session='.length);
+    } else if (arg.startsWith('--tool=')) {
+      args.tool = arg.slice('--tool='.length);
     } else if (arg === '--help') {
-      console.log('Usage: check-session-freshness.mjs [--threshold-tokens=3000000] [--threshold-messages=300] [--session=<file.jsonl>]');
+      console.log('Usage: check-session-freshness.mjs [--threshold-tokens=3000000] [--threshold-messages=300] [--session=<file.jsonl>] [--tool=auto|codex|claude]');
       process.exit(0);
     } else {
       console.error(`Unknown argument: ${arg}`);
@@ -60,20 +63,26 @@ function freshOpen(args, reason = '') {
 async function measureSession(args) {
   const target = args.session || '--latest';
   let sessionPath = target;
+  let tool = 'session-file';
   if (target === '--latest') {
-    const sessions = await listSessions();
+    const sessions = await listSessions({ tool: args.tool || 'auto' });
     if (!sessions.length) throw new Error('Không tìm thấy phiên nào.');
     sessionPath = sessions[0].path;
+    tool = sessions[0].tool || 'latest';
   }
-  return toTokenJson(await sumUsage(sessionPath));
+  return {
+    measured: toTokenJson(await sumUsage(sessionPath), { tool: args.session ? 'session-file' : tool, path: sessionPath }),
+    source: args.session ? 'session-file' : `${tool}-latest`,
+  };
 }
 
 export async function checkFreshness(args = {}) {
   args.thresholdTokens ||= DEFAULT_THRESHOLD_TOKENS;
   args.thresholdMessages ||= DEFAULT_THRESHOLD_MESSAGES;
   args.session ||= '';
+  args.tool ||= process.env.AI_TOKEN_TOOL || 'auto';
   try {
-    const measured = await measureSession(args);
+    const { measured, source } = await measureSession(args);
     const total = Number(measured.total_billed || 0);
     const messages = Number(measured.messages || 0);
     const fresh = total <= args.thresholdTokens && messages <= args.thresholdMessages;
@@ -84,7 +93,7 @@ export async function checkFreshness(args = {}) {
       session_duration_min: durationMin(measured.first, measured.last),
       threshold_tokens: args.thresholdTokens,
       threshold_messages: args.thresholdMessages,
-      source: args.session ? 'session-file' : 'claude-code-latest',
+      source,
     };
     if (!fresh) {
       console.error(

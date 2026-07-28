@@ -168,6 +168,45 @@ function computeStats(tests) {
   return stats;
 }
 
+async function getChecklist(project, runDir) {
+  const candidates = [
+    join(runDir, '.run-checklist.json'),
+    join(AUTOMATION_DIR, 'projects', project, '.run-checklist.json'),
+  ];
+  for (const file of candidates) {
+    if (!existsSync(file)) continue;
+    try {
+      return JSON.parse(await readFile(file, 'utf8'));
+    } catch {}
+  }
+  return null;
+}
+
+function renderChecklistAudit(checklist) {
+  const phases = ['prep', 'author', 'run_heal', 'finalize'];
+  const icon = { done: '✅', skipped: '⏭', running: '🔄', pending: '⚪', blocked: '⛔' };
+  const rows = [];
+  let ok = true;
+  for (const phase of phases) {
+    const item = checklist?.phases?.[phase] || { status: 'missing', note: 'Không thấy trong checklist.' };
+    const status = item.status || 'missing';
+    if (!['done', 'skipped'].includes(status)) ok = false;
+    rows.push({ phase, status, note: item.note || '', icon: icon[status] || '❓' });
+  }
+
+  const lines = ['## 🧭 Audit pipeline', ''];
+  lines.push('| Phase | Status | Note |', '|---|---|---|');
+  for (const row of rows) {
+    lines.push(`| ${row.phase} | ${row.icon} ${row.status} | ${String(row.note).replace(/\|/g, '\\|')} |`);
+  }
+  lines.push('');
+  lines.push(ok
+    ? '> Các pha bắt buộc đã ở trạng thái `done` hoặc `skipped` có lý do trong checklist.'
+    : '> ⚠️ Có pha chưa hoàn tất theo checklist. Cần kiểm tra `.run-checklist.md` trong run dir trước khi chốt kết luận.');
+  lines.push('', '---', '');
+  return lines;
+}
+
 export async function generateReport({ project, runId, healedTc = [], mode = 'normal', os: osArg = 'auto', from = null, to = null, sessionFreshness = null }) {
   if (!project || !runId) {
     throw new Error('Missing project/runId');
@@ -181,6 +220,7 @@ export async function generateReport({ project, runId, healedTc = [], mode = 'no
   }
   const results = JSON.parse(await readFile(resultsPath, 'utf8'));
   const tests = walkTests(results.suites, []).sort((a, b) => tcNumberOf(a.title) - tcNumberOf(b.title));
+  const checklist = await getChecklist(project, runDir);
 
   // .run-state.json (do merge-heal.mjs ghi) là nguồn CHUẨN cho healed_tc — không cần AI tự nhớ/truyền
   // --healed-tc qua nhiều vòng heal. Flag --healed-tc chỉ dùng khi chạy tay không qua heal loop.
@@ -220,6 +260,8 @@ export async function generateReport({ project, runId, healedTc = [], mode = 'no
   lines.push(`| ❌ Fail | ${stats.unexpected} |`);
   lines.push(`| ⚠️ Flaky (healed by retry) | ${stats.flaky} |`);
   lines.push(`| 🔧 Healed | ${healedCount} |`, '', '---', '');
+
+  lines.push(...renderChecklistAudit(checklist));
 
   lines.push('## 💰 Token tiêu thụ (cả lần chạy)', '');
   if (token) {
