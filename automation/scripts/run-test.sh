@@ -10,7 +10,8 @@ set -euo pipefail
 PROJECT_NAME="${1:?Usage: $0 <project_name> [args...]}"
 shift || true
 
-AUTOMATION_DIR="/home/user/ai-automation-test/automation"
+# Tự định vị: script nằm ở <root>/automation/scripts/ → AUTOMATION_DIR = 1 cấp trên
+AUTOMATION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_DIR="$AUTOMATION_DIR/projects/$PROJECT_NAME"
 RUN_ID="${TEST_RUN_ID:-$(date +%d_%m_%Y_%H_%M_%S_%3N)}"
 RUN_DIR="$PROJECT_DIR/test-results/runs/$RUN_ID"
@@ -31,6 +32,14 @@ if [ -f "$PROJECT_DIR/.env" ]; then
   PROJECT_ENV_FILE="--env-file $PROJECT_DIR/.env"
 fi
 
+# Nạp compose override riêng project (nếu có) — ví dụ mount cache đặc thù.
+# Mount/volume đặc thù KHÔNG nằm trong docker-compose.yml chung nữa.
+COMPOSE_FILES="-f docker-compose.yml"
+if [ -f "$PROJECT_DIR/docker-compose.override.yml" ]; then
+  COMPOSE_FILES="$COMPOSE_FILES -f $PROJECT_DIR/docker-compose.override.yml"
+  echo "[run-test] 🧩 Override: projects/$PROJECT_NAME/docker-compose.override.yml"
+fi
+
 GID="$(id -g)"
 export UID GID
 export TEST_PROJECT="$PROJECT_NAME"
@@ -38,17 +47,42 @@ export TEST_RUN_ID="$RUN_ID"
 export TEST_FAST="${TEST_FAST:-}"
 export TEST_LIVE="${TEST_LIVE:-}"
 
+# If the orchestrator parsed --live during PREP but forgot to pass TEST_LIVE=1
+# into this wrapper, honor the saved run state so noVNC is still published.
+if [ -z "$TEST_LIVE" ] && [ -f "$PROJECT_DIR/.run-state.json" ]; then
+  STATE_LIVE="$(node -e 'const fs=require("fs"); try { const s=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write((s.mode==="live" || s.flags?.live) ? "1" : ""); } catch {}' "$PROJECT_DIR/.run-state.json")"
+  if [ -n "$STATE_LIVE" ]; then
+    export TEST_LIVE=1
+  fi
+fi
+
 mkdir -p "$RUN_DIR"
+
+# Guard: từ chối nếu run dir đã có artifacts — ngăn heal rerun ghi đè main run
+if [ -d "$RUN_DIR/artifacts" ] && [ -n "$(ls -A "$RUN_DIR/artifacts" 2>/dev/null)" ]; then
+  echo "[run-test] ❌ RUN_ID '$RUN_ID' đã có artifacts tại:"
+  echo "           $RUN_DIR/artifacts"
+  echo "[run-test] Dùng HEAL_RUN_ID riêng: TEST_RUN_ID=\"${RUN_ID}_h1\" ./scripts/run-test.sh ..."
+  exit 1
+fi
+
+# Lint gate: chặn fake assertion / test.skip che giấu bug (Rule #15) trước khi chạy
+"$AUTOMATION_DIR/scripts/lint-test.sh" "$PROJECT_NAME"
 
 echo "[run-test] 🐳 Project: '$PROJECT_NAME' | Run ID: $RUN_ID"
 [ -n "$TEST_FAST" ] && echo "[run-test] ⚡ Fast mode ON (no video/trace)"
 [ -n "$TEST_LIVE" ] && echo "[run-test] 🖥️  Live mode ON — mở http://localhost:6080/vnc.html để xem"
+if [ -n "$TEST_LIVE" ] && tr '\0' ' ' < /proc/1/cmdline 2>/dev/null | grep -q -- '--unshare-net'; then
+  echo "[run-test] ⚠️  Codex/network sandbox detected (--unshare-net)."
+  echo "[run-test] ⚠️  noVNC vẫn chạy trong container, nhưng http://localhost:6080/vnc.html có thể không truy cập được từ browser host."
+  echo "[run-test] ⚠️  Với Codex + --live, hãy chạy lệnh này outside sandbox / sandbox_permissions=require_escalated để port 6080 publish ra host."
+fi
 
 # Cài deps chỉ khi package-lock.json thay đổi, không cài lại mỗi lần chạy test
 # shellcheck disable=SC2086
 if [ ! -f "$DEPS_MARKER" ] || [ "$PKG_LOCK" -nt "$DEPS_MARKER" ]; then
   echo "[run-test] 📦 Cài dependencies..."
-  docker compose $PROJECT_ENV_FILE run --rm --user root \
+  docker compose $COMPOSE_FILES $PROJECT_ENV_FILE run --rm --user root \
     -e HOST_UID="$(id -u)" \
     -e HOST_GID="$(id -g)" \
     playwright \
@@ -64,12 +98,13 @@ set +e
 if [ -n "$TEST_LIVE" ]; then
   # Live mode: publish port 6080 cho noVNC
   # shellcheck disable=SC2086
-  docker compose $PROJECT_ENV_FILE run --rm \
+  docker compose $COMPOSE_FILES $PROJECT_ENV_FILE run --rm \
     -p 6080:6080 \
     -e TEST_PROJECT="$PROJECT_NAME" \
     -e TEST_RUN_ID="$RUN_ID" \
     -e TEST_LIVE="$TEST_LIVE" \
     -e TEST_FAST="$TEST_FAST" \
+    -e VNC_GEOMETRY="${VNC_GEOMETRY:-}" \
     -e SPEC_FILE="$SPEC_PATH" \
     --entrypoint bash \
     playwright \
@@ -77,7 +112,7 @@ if [ -n "$TEST_LIVE" ]; then
 else
   # Normal / fast mode
   # shellcheck disable=SC2086
-  docker compose $PROJECT_ENV_FILE run --rm \
+  docker compose $COMPOSE_FILES $PROJECT_ENV_FILE run --rm \
     -e TEST_PROJECT="$PROJECT_NAME" \
     -e TEST_RUN_ID="$RUN_ID" \
     -e TEST_FAST="$TEST_FAST" \
@@ -93,6 +128,6 @@ echo ""
 echo "[run-test] 📁 Run dir: $RUN_DIR"
 [ -f "$RUN_DIR/results.json" ]     && echo "[run-test] 📄 JSON: $RUN_DIR/results.json"
 [ -d "$RUN_DIR/artifacts" ]        && echo "[run-test] 📁 Artifacts: $RUN_DIR/artifacts"
-[ -d "$RUN_DIR/playwright-report" ] && echo "[run-test] 📊 HTML: cd $AUTOMATION_DIR && docker compose run --rm playwright npx playwright show-report $RUN_DIR/playwright-report"
+[ -d "$RUN_DIR/playwright-report" ] && echo "[run-test] 📊 HTML: cd $AUTOMATION_DIR && ./scripts/show-report.sh $PROJECT_NAME $RUN_ID"
 
 exit $EXIT_CODE

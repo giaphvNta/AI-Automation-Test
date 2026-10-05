@@ -8,9 +8,12 @@ PROJECT_NAME="${1:?missing project name}"
 shift || true
 SPEC_PATH="${SPEC_FILE:-projects/$PROJECT_NAME/tests/}"
 
-# Khởi virtual display 1366×768
+# Khởi virtual display. Default 1280×720 = khớp viewport Desktop Chrome của Playwright
+# → browser phủ kín màn hình VNC, không còn khoảng đen bên phải.
+# Project nào dùng viewport rộng hơn (vd 1400) → set VNC_GEOMETRY trong projects/<name>/.env.
+GEOMETRY="${VNC_GEOMETRY:-1280x720}"
 export DISPLAY=:99
-Xvfb :99 -screen 0 1366x768x24 -ac +extension GLX +render -noreset &
+Xvfb :99 -screen 0 "${GEOMETRY}x24" -ac +extension GLX +render -noreset &
 XVFB_PID=$!
 sleep 0.8
 

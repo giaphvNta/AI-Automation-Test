@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { createSign } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT_DIR = '/home/user/ai-automation-test';
+const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets.readonly';
 
@@ -17,7 +18,7 @@ Options:
                        tránh việc tool tự ghi kết quả làm hash đổi.
 
 Defaults:
-  --auth=/home/user/ai-automation-test/service-auth.json
+  --auth=<ROOT>/service-auth.json (mặc định: <repo-root>/service-auth.json)
   --range=A:Z
   --format=markdown`);
 }
@@ -148,15 +149,24 @@ async function readValues(spreadsheetId, range, accessToken) {
   return data.values || [];
 }
 
-// Các header cột kết quả test — tool ghi ngược vào các cột này (write-results-to-sheet.mjs),
-// nên phải loại khỏi nội dung khi hash để detect thay đổi spec.
-// Match EXACT (sau normalize) để tránh false positive ("Expected Results" không match "result").
-const RESULT_COL_HEADERS = [
+// Các cột kết quả test — tool ghi ngược vào (write-results-to-sheet.mjs), phải loại khỏi
+// nội dung khi hash để detect thay đổi spec. Header thật thường là chuỗi song ngữ ghép
+// (vd "結果2 Kết quả 2", "実施日1 Ngày thực hiện 1", "備考 Nhận xét") nên KHÔNG match exact được
+// → match theo CHỨA keyword result. Nhưng phải LOẠI TRỪ cột "期待結果 Kết quả mong muốn"
+// (Expected Results = nội dung spec, KHÔNG được strip — nếu strip sẽ mất expected → INC-05).
+const RESULT_KEYWORDS = [
   'chrome', 'chromium', 'safari', 'webkit', 'firefox', 'edge',
-  'tester', 'tested by', 'qa', 'người test',
-  'date test', 'test date', 'ngày test', 'run date', 'date',
-  'status', 'result', 'kết quả', 'trạng thái', '結果',
-  'notes', 'note', 'ghi chú', 'error',
+  'tester', 'tested by', 'người test', 'người thực hiện', '実施者',
+  'date test', 'test date', 'ngày test', 'run date', 'ngày thực hiện', '実施日',
+  'status', 'trạng thái',
+  '結果', 'kết quả', 'result',
+  '備考', 'ghi chú', 'notes', 'note', 'error', 'remark',
+];
+// Nếu header chứa 1 trong các từ này → là cột SPEC (expected/điều kiện/bước...) → KHÔNG strip.
+const SPEC_EXCLUDE_KEYWORDS = [
+  '期待', 'expected', 'mong muốn', 'kết quả mong',
+  'pre-condition', 'điều kiện', 'objective', 'mục tiêu',
+  'test step', 'các bước', 'nội dung', 'mô tả', 'ケース', 'quan điểm', '確認箇所',
 ];
 
 function stripResultColumns(rows) {
@@ -164,11 +174,15 @@ function stripResultColumns(rows) {
   const width = Math.max(...rows.map((row) => row.length));
   const norm = (v) => String(v ?? '').toLowerCase().trim();
   const drop = new Set();
-  // Header có thể nằm ở 1-3 dòng đầu (double-header: "First time" + sub-row "Chrome")
-  const scanRows = rows.slice(0, 3);
+  // Header có thể nằm ở 1 trong vài dòng đầu (template Nhật: 2 dòng metadata rồi mới tới header thật).
+  const scanRows = rows.slice(0, 4);
   for (let col = 0; col < width; col++) {
     for (const row of scanRows) {
-      if (RESULT_COL_HEADERS.includes(norm(row[col]))) {
+      const cell = norm(row[col]);
+      if (!cell) continue;
+      const isSpec = SPEC_EXCLUDE_KEYWORDS.some((kw) => cell.includes(kw));
+      if (isSpec) continue; // cột spec (vd 期待結果) → giữ lại
+      if (RESULT_KEYWORDS.some((kw) => cell.includes(kw))) {
         drop.add(col);
         break;
       }
@@ -185,8 +199,13 @@ function escapeCell(value) {
   return text.replaceAll('|', '\\|');
 }
 
-function toMarkdown(rows, source) {
-  if (rows.length === 0) return `# Google Sheet Input\n\nSource: ${source}\n\nNo rows found.\n`;
+// omitSource=true khi output chỉ dùng để HASH (--strip-result-cols): bỏ dòng Source vì URL
+// gõ khác nhau (edit?gid=... vs edit#gid=...) sẽ làm hash đổi oan dù nội dung spec y hệt.
+function toMarkdown(rows, source, omitSource = false) {
+  const sourceLine = omitSource ? [] : [`Source: ${source}`, ''];
+  if (rows.length === 0) {
+    return [`# Google Sheet Input`, '', ...sourceLine, 'No rows found.', ''].join('\n');
+  }
 
   const width = Math.max(...rows.map((row) => row.length));
   const normalized = rows.map((row) =>
@@ -198,8 +217,7 @@ function toMarkdown(rows, source) {
   return [
     '# Google Sheet Input',
     '',
-    `Source: ${source}`,
-    '',
+    ...sourceLine,
     `| ${header.join(' | ')} |`,
     `| ${header.map(() => '---').join(' | ')} |`,
     ...body.map((row) => `| ${row.join(' | ')} |`),
@@ -228,7 +246,7 @@ async function main() {
   let output;
   if (args.format === 'json') output = `${JSON.stringify({ spreadsheetId, range, rows }, null, 2)}\n`;
   else if (args.format === 'csv') output = toCsv(rows);
-  else output = toMarkdown(rows, args.input);
+  else output = toMarkdown(rows, args.input, args.stripResultCols);
 
   if (args.out) writeFileSync(resolve(args.out), output);
   else process.stdout.write(output);

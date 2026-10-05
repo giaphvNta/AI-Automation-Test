@@ -17,7 +17,10 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  workers: isFast ? 4 : 2,
+  // Normal: 1 worker — các spec file chạy tuần tự, tránh contamination app state
+  // (rate limit, DB seed, blacklist IP container) giữa các file chạy song song.
+  // Project có tests hoàn toàn độc lập → override bằng TEST_WORKERS trong projects/<name>/.env.
+  workers: Number(process.env.TEST_WORKERS || (isFast ? 4 : 1)),
   reporter: isFast
     ? [
         ['dot'],
@@ -29,6 +32,10 @@ export default defineConfig({
         ['json', { outputFile: `${testRunDir}/results.json` }],
       ],
   outputDir: `${testRunDir}/artifacts`,
+  // Visual baseline (vd export từ Figma) lưu tại projects/<proj>/baselines/<name>.png,
+  // không kèm hậu tố platform → ảnh design dùng trực tiếp, độc lập OS.
+  // Chỉ áp dụng cho assertion toHaveScreenshot/toMatchSnapshot (hiện chỉ figma-poc dùng).
+  snapshotPathTemplate: 'projects/{testFileDir}/../baselines/{arg}{ext}',
   timeout: 30_000,
   expect: { timeout: 5_000 },
 

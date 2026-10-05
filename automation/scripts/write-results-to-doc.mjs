@@ -14,9 +14,10 @@
 
 import { createSign } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT_DIR = '/home/user/ai-automation-test';
+const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DOCS_SCOPE = 'https://www.googleapis.com/auth/documents';
 
@@ -76,7 +77,9 @@ function formatPath(linuxPath) {
   try {
     const proc = readFileSync('/proc/version', 'utf8');
     if (proc.toLowerCase().includes('microsoft')) {
-      return linuxPath.replaceAll('/', '\\').replace('\\home', '\\\\wsl.localhost\\Ubuntu\\home');
+      const distro = process.env.WSL_DISTRO_NAME;
+      if (distro && distro.trim()) return `\\\\wsl.localhost\\${distro.trim()}` + linuxPath.replaceAll('/', '\\');
+      return `file://${linuxPath}`;
     }
   } catch {}
   return `file://${linuxPath}`;

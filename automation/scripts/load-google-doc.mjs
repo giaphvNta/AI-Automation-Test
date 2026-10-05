@@ -7,9 +7,10 @@
 
 import { createSign } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT_DIR = '/home/user/ai-automation-test';
+const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const DOCS_SCOPE = 'https://www.googleapis.com/auth/documents.readonly';
 

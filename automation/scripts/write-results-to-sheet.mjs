@@ -6,7 +6,7 @@
 // ── UPDATE mode (mặc định) ────────────────────────────────────────────────────
 // Tìm đúng dòng test case trong sheet gốc → tự động fill các cột:
 //   • Cột browser (Chrome, Safari, Firefox...) → kết quả test trên browser đó
-//   • Cột Tester → "Claude AI" (hoặc giá trị --tester)
+//   • Cột Tester → "AI Automation" (hoặc giá trị --tester)
 //   • Cột Test date → ngày chạy
 //   • Cột Status/Result → ✅ PASS / ❌ FAIL tổng hợp
 //   • Cột Notes/Error → lỗi nếu fail
@@ -22,7 +22,7 @@
 //     [--date-col=<col>]     # Cột Test date — auto-detect
 //     [--note-col=<col>]     # Cột Notes/Error — auto-detect
 //     [--tester-col=<col>]   # Cột Tester — auto-detect
-//     [--tester="Claude AI"] # Giá trị ghi vào cột Tester (mặc định: "Claude AI")
+//     [--tester="AI Automation"] # Giá trị ghi vào cột Tester (mặc định: "AI Automation")
 //     [--tab=<name>]         # Sheet tab (mặc định: tab đầu tiên) — alias: --sheet-tab
 //     [--start-row=<n>]      # Dòng data đầu tiên (mặc định: 2)
 //
@@ -38,9 +38,10 @@
 
 import { createSign } from 'node:crypto';
 import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT_DIR = '/home/user/ai-automation-test';
+const ROOT_DIR = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 
@@ -48,8 +49,9 @@ const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 
 // Cột status/kết quả tổng hợp
 // ⚠️ KHÔNG dùng 'result' làm keyword vì match nhầm "Expected Results" (cột spec, không phải cột kết quả test)
-// Chỉ match khi header là "Status", "Kết quả", "Outcome" — không match "Expected Results", "Test Results", v.v.
-const RESULT_COL_KEYWORDS = ['status', 'kết quả', 'outcome', 'trạng thái', '結果'];
+// ⚠️ KHÔNG match "期待結果" (expected result tiếng Nhật) — đã loại ở SPEC_COLUMN_PREFIXES
+// Match ưu tiên: "結果1", "結果2" (có số suffix) trước, rồi mới "結果" đơn thuần
+const RESULT_COL_KEYWORDS = ['結果2', '結果1', 'kết quả 2', 'kết quả 1', 'status', 'kết quả', 'outcome', 'trạng thái', '結果'];
 // Cột tên test case để match
 const MATCH_COL_KEYWORDS  = ['test case', 'testcase', 'test name', 'tên test', 'scenario',
                               'title', 'case name', 'id', 'no.', 'no ', 'tc'];
@@ -183,8 +185,9 @@ function letterToIndex(letter) {
   return index - 1;
 }
 
-// Các prefix chỉ ra đây là cột spec/mô tả, KHÔNG phải cột kết quả test
-const SPEC_COLUMN_PREFIXES = ['expected', 'actual', 'test step', 'pre-condition', 'objective', 'mô tả', 'muc tieu'];
+// Các prefix/keyword chỉ ra đây là cột spec/mô tả, KHÔNG phải cột kết quả test
+// Thêm: '期待' (kỳ vọng/expected tiếng Nhật) để tránh match nhầm "期待結果" (expected result)
+const SPEC_COLUMN_PREFIXES = ['expected', 'actual', 'test step', 'pre-condition', 'objective', 'mô tả', 'muc tieu', '期待', '予想', 'kết quả mong'];
 
 function detectColumn(headers, keywords) {
   const norm = (s) => (s || '').toLowerCase().trim();
@@ -267,9 +270,10 @@ function normalize(s) {
   return (s || '').toLowerCase().replace(/[^\w　-鿿가-힯]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function extractTcNumber(s) {
-  // Match "TC-01", "TC01", "TC-14b" etc. → normalize to plain integer string
-  const tcMatch = (s || '').match(/\btc[-\s]?(\d+)/i);
+function extractTestNumber(s) {
+  // Match "T-01", "T01", "T-14b" and the old two-letter prefix → normalize to plain integer string
+  const idMatch = (s || '').match(/\bt(?:c)?-[a-z0-9-]*\d+[a-z]?|\bt(?:c)?\d+[a-z]?/i);
+  const tcMatch = idMatch?.[0]?.match(/(\d+)[a-z]?$/i);
   if (tcMatch) return String(parseInt(tcMatch[1], 10));
   // Match plain integer cell value like "1", "14" in sheet ID column
   const numMatch = (s || '').trim().match(/^(\d+)$/);
@@ -278,9 +282,9 @@ function extractTcNumber(s) {
 }
 
 function matchTestToRow(testTitle, rowValue) {
-  const tcTest = extractTcNumber(testTitle);
-  const tcRow  = extractTcNumber(rowValue);
-  if (tcTest && tcRow && tcTest === tcRow) return true;
+  const testNumber = extractTestNumber(testTitle);
+  const rowNumber = extractTestNumber(rowValue);
+  if (testNumber && rowNumber && testNumber === rowNumber) return true;
 
   const normTest = normalize(testTitle);
   const normRow  = normalize(rowValue);
@@ -296,7 +300,9 @@ function formatPath(linuxPath) {
   try {
     const proc = readFileSync('/proc/version', 'utf8');
     if (proc.toLowerCase().includes('microsoft')) {
-      return linuxPath.replaceAll('/', '\\').replace('\\home', '\\\\wsl.localhost\\Ubuntu\\home');
+      const distro = process.env.WSL_DISTRO_NAME;
+      if (distro && distro.trim()) return `\\\\wsl.localhost\\${distro.trim()}` + linuxPath.replaceAll('/', '\\');
+      return `file://${linuxPath}`;
     }
   } catch {}
   return `file://${linuxPath}`;
@@ -315,7 +321,7 @@ function parseArgs(argv) {
     dateCol: '',
     noteCol: '',
     testerCol: '',
-    tester: 'Claude AI',
+    tester: 'AI Automation',
     tab: '',
     startRow: 2,
     healed: 0,
@@ -546,8 +552,8 @@ async function modeUpdate(args, token) {
     return;
   }
 
-  // Cảnh báo khi nhiều test gộp vào cùng 1 row — thường do generator đặt TC ID sai
-  // (vd: TC-30b/TC-30c thay vì TC-31/TC-32) → worst-status ghi đè kết quả thật của row đó
+  // Cảnh báo khi nhiều test gộp vào cùng 1 row — thường do generator đặt T ID sai
+  // (vd: T-30b/T-30c thay vì T-31/T-32) → worst-status ghi đè kết quả thật của row đó
   const rowTestCount = new Map();
   for (const m of matched) {
     const rowNum = m.match(/row (\d+)/)?.[1];
@@ -555,7 +561,7 @@ async function modeUpdate(args, token) {
   }
   for (const [rowNum, count] of rowTestCount.entries()) {
     if (count > 1) {
-      console.error(`[write-results] ⚠️  ${count} tests gộp vào row ${rowNum} — kiểm tra TC ID trong test file có khớp sheet không:`);
+      console.error(`[write-results] ⚠️  ${count} tests gộp vào row ${rowNum} — kiểm tra T ID trong test file có khớp sheet không:`);
       matched.filter(m => m.includes(`row ${rowNum}`)).forEach(m => console.error('    -', m));
     }
   }

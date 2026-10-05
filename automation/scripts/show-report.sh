@@ -9,7 +9,7 @@ set -euo pipefail
 PROJECT_NAME="${1:?Usage: $0 <project_name> [run_id]}"
 RUN_ID="${2:-}"
 
-AUTOMATION_DIR="/home/user/ai-automation-test/automation"
+AUTOMATION_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNS_DIR="$AUTOMATION_DIR/projects/$PROJECT_NAME/test-results/runs"
 
 if [ ! -d "$RUNS_DIR" ]; then
@@ -18,8 +18,9 @@ if [ ! -d "$RUNS_DIR" ]; then
 fi
 
 # Tự chọn run mới nhất nếu không truyền run_id
+# Sort theo mtime — KHÔNG sort theo tên vì RUN_ID format DD_MM_YYYY không sort được theo thời gian
 if [ -z "$RUN_ID" ]; then
-  RUN_ID="$(find "$RUNS_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort | tail -n 1)"
+  RUN_ID="$(find "$RUNS_DIR" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %f\n' | sort -n | tail -n 1 | cut -d' ' -f2)"
 fi
 
 REPORT_DIR="$AUTOMATION_DIR/projects/$PROJECT_NAME/test-results/runs/$RUN_ID/playwright-report"
@@ -33,6 +34,14 @@ fi
 
 echo "[show-report] 📊 Project: $PROJECT_NAME | Run: $RUN_ID"
 echo "[show-report] 🌐 Mở trình duyệt: http://localhost:9323"
+echo "[show-report] ⚠️  LƯU Ý: report HTML này là ẢNH CHỤP LẦN CHẠY GỐC — KHÔNG cập nhật sau heal."
+echo "[show-report]     Case đã heal-pass vẫn hiện FAILED + video trước heal ở đây."
+echo "[show-report]     👉 Kết quả & video CHÍNH THỨC (đã merge heal): xem AI_REPORT.md trong run dir."
+if tr '\0' ' ' < /proc/1/cmdline 2>/dev/null | grep -q -- '--unshare-net'; then
+  echo "[show-report] ⚠️  Codex/network sandbox detected (--unshare-net)."
+  echo "[show-report] ⚠️  http://localhost:9323 có thể không truy cập được từ browser host."
+  echo "[show-report] ⚠️  Trong Codex, chạy lệnh này outside sandbox / sandbox_permissions=require_escalated để publish port ra host."
+fi
 echo ""
 
 cd "$AUTOMATION_DIR"
